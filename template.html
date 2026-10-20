@@ -1,0 +1,356 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data:; base-uri 'none'; form-action 'none'">
+<meta name="robots" content="noindex, nofollow">
+<meta name="referrer" content="no-referrer">
+<title>네이버 SA 변경 효과 추적</title>
+<style>
+:root{
+  --bg:#f5f6f8; --card:#fff; --ink:#1b1f24; --sub:#5b6573; --line:#e3e6ea; --soft:#f0f2f5;
+  --up:#0a8f5a; --up-bg:#e3f5ec; --down:#d0342c; --down-bg:#fdeceb; --flat:#6b7480; --flat-bg:#eef0f3;
+  --wait:#2f6fdb; --wait-bg:#e8f0fd; --new:#7a4fd6; --new-bg:#f0eafd; --none:#9aa3ad;
+  --bar:#c9d3df; --lineC:#03c75a; --accent:#03c75a; --mark:#1b1f24;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#121417; --card:#1b1e23; --ink:#e8eaed; --sub:#9aa3ad; --line:#2c3138; --soft:#23272d;
+    --up:#3ccf8e; --up-bg:#163327; --down:#ff6b62; --down-bg:#3a1d1b; --flat:#a5adb7; --flat-bg:#2a2f36;
+    --wait:#6ea2ff; --wait-bg:#1b2a44; --new:#b195ff; --new-bg:#2b2342; --bar:#3a4350; --mark:#e8eaed;
+  }
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:14px/1.5 -apple-system,"Malgun Gothic","Apple SD Gothic Neo",sans-serif}
+.wrap{max-width:1280px;margin:0 auto;padding:20px 16px 60px}
+h1{font-size:22px;margin:0 0 4px}
+.meta{color:var(--sub);font-size:13px}
+details.guide{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:10px 14px;margin:14px 0}
+details.guide summary{cursor:pointer;font-weight:600}
+details.guide li{margin:3px 0}
+.summary{display:flex;gap:8px;flex-wrap:wrap;margin:14px 0}
+.stat{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:10px 14px;min-width:110px;cursor:pointer;user-select:none}
+.stat b{display:block;font-size:22px}
+.stat span{color:var(--sub);font-size:12px}
+.stat.on{outline:2px solid var(--accent)}
+.filters{display:flex;gap:8px;flex-wrap:wrap;align-items:center;background:var(--card);border:1px solid var(--line);border-radius:10px;padding:10px 12px;position:sticky;top:0;z-index:5}
+select,input[type=search]{font:inherit;padding:6px 8px;border:1px solid var(--line);border-radius:6px;background:var(--card);color:var(--ink)}
+input[type=search]{min-width:180px;flex:1}
+.chip{border:1px solid var(--line);border-radius:999px;padding:4px 10px;cursor:pointer;font-size:12px;background:var(--card);color:var(--ink)}
+.chip.on{background:var(--ink);color:var(--card);border-color:var(--ink)}
+label.chk{font-size:13px;color:var(--sub);display:flex;gap:4px;align-items:center}
+h2{font-size:16px;margin:24px 0 10px}
+h2 small{font-weight:400;color:var(--sub);font-size:12px;margin-left:6px}
+.panel{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:12px 14px}
+.acctrow{display:grid;grid-template-columns:200px 1fr 90px;gap:12px;align-items:center;padding:6px 0;border-bottom:1px solid var(--line)}
+.acctrow:last-child{border-bottom:0}
+.acctrow .nm{font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;cursor:pointer}
+.acctrow .nm small{display:block;font-weight:400;color:var(--sub)}
+.acctrow .cnt{text-align:right;color:var(--sub);font-size:12px}
+.legend{display:flex;gap:14px;flex-wrap:wrap;font-size:12px;color:var(--sub);margin-bottom:6px}
+.legend i{display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:4px;vertical-align:-1px}
+.cards{display:grid;gap:10px}
+.card{background:var(--card);border:1px solid var(--line);border-left:5px solid var(--none);border-radius:10px;padding:12px 14px;display:grid;grid-template-columns:minmax(0,1.25fr) minmax(0,1fr);gap:14px}
+.card.v-성장{border-left-color:var(--up)} .card.v-하락{border-left-color:var(--down)} .card.v-보합{border-left-color:var(--flat)}
+.card.v-관찰중{border-left-color:var(--wait)} .card.v-신규{border-left-color:var(--new)}
+.card.flash{animation:flash 1.6s}
+@keyframes flash{0%{box-shadow:0 0 0 3px var(--accent)}100%{box-shadow:none}}
+.badge{display:inline-block;font-weight:700;font-size:12px;padding:2px 8px;border-radius:6px;margin-right:6px}
+.b-성장{color:var(--up);background:var(--up-bg)} .b-하락{color:var(--down);background:var(--down-bg)} .b-보합{color:var(--flat);background:var(--flat-bg)}
+.b-관찰중{color:var(--wait);background:var(--wait-bg)} .b-신규{color:var(--new);background:var(--new-bg)} .b-데이터없음{color:var(--none);background:var(--soft)}
+.hd{display:flex;flex-wrap:wrap;align-items:center;gap:4px 8px}
+.when{font-weight:600}
+.path{color:var(--sub);font-size:13px;margin:4px 0 6px;word-break:break-all}
+.path b{color:var(--ink)}
+.tag{font-size:11px;border:1px solid var(--line);border-radius:4px;padding:0 5px;color:var(--sub)}
+.items{margin:6px 0;padding:0;list-style:none;font-size:13px}
+.items li{padding:3px 0;border-top:1px dashed var(--line)}
+.items li .t{color:var(--sub);font-size:12px;margin-right:6px}
+.items .src{font-size:11px;color:var(--sub)}
+.more{color:var(--wait);cursor:pointer;font-size:12px}
+table.kpi{width:100%;border-collapse:collapse;font-size:12.5px;margin-top:6px}
+table.kpi th,table.kpi td{padding:4px 6px;text-align:right;border-bottom:1px solid var(--line);white-space:nowrap}
+table.kpi th:first-child,table.kpi td:first-child{text-align:left;color:var(--sub)}
+table.kpi thead th{color:var(--sub);font-weight:500}
+table.kpi tr.key td{font-weight:700}
+.pu{color:var(--up)} .pd{color:var(--down)} .pz{color:var(--flat)}
+.note{font-size:12px;color:var(--sub);margin-top:6px}
+.warn{font-size:12px;color:var(--down);margin-top:4px}
+.kw{font-size:12.5px;margin-top:8px;background:var(--soft);border-radius:8px;padding:8px 10px}
+.kw table{width:100%;border-collapse:collapse;margin-top:4px}
+.kw td{padding:2px 4px;text-align:right}
+.kw td:first-child{text-align:left}
+svg text{fill:var(--sub);font-size:10px}
+.empty{padding:30px;text-align:center;color:var(--sub)}
+.pager{text-align:center;margin:14px 0}
+.pager button{font:inherit;padding:8px 16px;border-radius:8px;border:1px solid var(--line);background:var(--card);color:var(--ink);cursor:pointer}
+@media (max-width:820px){
+  .card{grid-template-columns:1fr}
+  .acctrow{grid-template-columns:1fr;gap:4px}
+  .acctrow .cnt{text-align:left}
+}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>네이버 SA 변경 효과 추적</h1>
+  <div class="meta" id="meta"></div>
+
+  <details class="guide">
+    <summary>이 화면 보는 법</summary>
+    <ul>
+      <li>광고센터에서 무언가를 바꾼 날(키워드 추가, 입찰가·예산·타겟팅 변경, ON/OFF 등)마다 카드 하나가 생깁니다. 같은 날 같은 광고그룹에서 바뀐 것은 한 카드로 묶습니다.</li>
+      <li>각 카드는 <b>변경 전 <span class="w"></span>일</b>과 <b>변경 후 <span class="w"></span>일</b>의 하루 평균을 비교합니다. 변경 당일은 반나절만 반영되므로 비교에서 뺍니다.</li>
+      <li><b>판정 기준</b>: 전환매출이 있으면 전환매출, 없으면 클릭이 <span class="th"></span>% 이상 늘면 <span class="badge b-성장">성장</span>, 줄면 <span class="badge b-하락">하락</span>, 그 사이면 <span class="badge b-보합">보합</span>입니다. 변경 후 3일이 안 됐으면 <span class="badge b-관찰중">관찰중</span>, 변경 전 성과가 없던 대상(새 광고그룹 등)은 <span class="badge b-신규">신규</span>입니다.</li>
+      <li>같은 기간 <b>계정 전체</b>의 변화도 함께 봅니다. 계정 전체가 비슷하게 움직였다면 시즌·요일 영향일 수 있어 카드에 따로 적습니다.</li>
+      <li>미니 차트: 회색 막대는 광고비, 초록 선은 전환매출(없으면 클릭)이고, 세로선이 변경한 날, 음영이 비교한 변경 후 기간입니다.</li>
+      <li>키워드를 추가한 카드에는 추가된 키워드 자체의 성과(노출·클릭·매출)가 함께 나옵니다.</li>
+    </ul>
+    <b>숫자 볼 때 주의</b>
+    <ul>
+      <li>매일 아침 어제까지의 데이터로 새로 만들어집니다. 광고비는 대용량 보고서 기준(VAT 제외)입니다.</li>
+      <li>전환은 며칠 늦게 잡히기도 해서, 최근 변경일수록 실제보다 낮게 보일 수 있습니다.</li>
+      <li>변경 후 <span class="w"></span>일 안에 같은 대상을 또 바꿨다면 효과가 섞입니다. 카드에 "겹침"으로 표시됩니다.</li>
+      <li>변경 기록 출처: <b>API 감지</b>(매일 계정 상태를 비교해 자동 감지)와 <b>광고센터 변경이력</b>(엑셀을 inbox 폴더에 넣으면 반영, 변경자 포함).</li>
+    </ul>
+  </details>
+
+  <div class="summary" id="summary"></div>
+
+  <div class="filters">
+    <select id="fAcct"></select>
+    <select id="fDays">
+      <option value="7">최근 7일</option><option value="14">최근 14일</option>
+      <option value="30" selected>최근 30일</option><option value="60">최근 60일</option>
+    </select>
+    <span id="fCats"></span>
+    <label class="chk"><input type="checkbox" id="fSys" checked> SYSTEM 변경 숨기기</label>
+    <input type="search" id="fQ" placeholder="캠페인·광고그룹·내용 검색">
+  </div>
+
+  <h2 id="tlTitle">광고주별 흐름<small>막대: 일 광고비 · 선: 전환매출 · 점: 변경한 날(색 = 판정)</small></h2>
+  <div class="panel">
+    <div class="legend">
+      <span><i style="background:var(--bar)"></i>광고비</span>
+      <span><i style="background:var(--lineC)"></i>전환매출</span>
+      <span><i style="background:var(--up)"></i>성장</span>
+      <span><i style="background:var(--down)"></i>하락</span>
+      <span><i style="background:var(--flat)"></i>보합</span>
+      <span><i style="background:var(--wait)"></i>관찰중</span>
+      <span><i style="background:var(--new)"></i>신규</span>
+    </div>
+    <div id="timeline"></div>
+  </div>
+
+  <h2>변경 내역과 그 후 변화<small id="listInfo"></small></h2>
+  <div class="cards" id="cards"></div>
+  <div class="pager" id="pager"></div>
+</div>
+
+<script>
+const DATA = /*__DATA__*/null;
+const V_ORDER = ["성장","하락","보합","관찰중","신규","데이터없음"];
+const V_COLOR = {"성장":"var(--up)","하락":"var(--down)","보합":"var(--flat)","관찰중":"var(--wait)","신규":"var(--new)","데이터없음":"var(--none)"};
+const CATS = ["키워드","입찰가","예산","ON·OFF","타겟팅","소재","구조","기타"];
+const state = {acct:"", days:30, cats:new Set(), hideSys:true, q:"", verdict:"", page:1};
+const PAGE = 40;
+
+const $ = s => document.querySelector(s);
+const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+const won = v => v == null ? "-" : Math.round(v).toLocaleString("ko-KR") + "원";
+const num = (v, d=0) => v == null ? "-" : Number(v).toLocaleString("ko-KR", {maximumFractionDigits:d, minimumFractionDigits:d});
+const kwon = v => v >= 10000 ? (v/10000).toFixed(v >= 100000 ? 0 : 1) + "만" : Math.round(v).toLocaleString("ko-KR");
+function pctCell(p, invert){
+  if (p == null) return '<td class="pz">-</td>';
+  if (p >= 999) return '<td class="pu">신규</td>';
+  const good = invert ? p < 0 : p > 0;
+  const cls = Math.abs(p) < 1 ? "pz" : (good ? "pu" : "pd");
+  return `<td class="${cls}">${p > 0 ? "▲" : p < 0 ? "▼" : ""}${Math.abs(p).toFixed(0)}%</td>`;
+}
+function addDays(iso, n){ const d = new Date(iso + "T00:00:00"); d.setDate(d.getDate() + n); return d.toISOString().slice(0,10); }
+
+function filtered(ignoreVerdict){
+  const since = addDays(DATA.base_date, -state.days + 1);
+  const q = state.q.trim().toLowerCase();
+  return DATA.actions.filter(a =>
+    a.date >= since &&
+    (!state.acct || a.customer_id === state.acct) &&
+    (!state.hideSys || !a.system_only) &&
+    (!state.cats.size || a.categories.some(c => state.cats.has(c))) &&
+    (ignoreVerdict || !state.verdict || a.verdict === state.verdict) &&
+    (!q || [a.account, a.campaign, a.adgroup, ...a.items.map(i => i.detail + " " + i.type)].join(" ").toLowerCase().includes(q))
+  );
+}
+
+function renderSummary(){
+  const list = filtered(true);
+  const cnt = {}; list.forEach(a => cnt[a.verdict] = (cnt[a.verdict] || 0) + 1);
+  const box = [`<div class="stat ${!state.verdict ? "on" : ""}" data-v=""><b>${list.length}</b><span>변경 전체</span></div>`];
+  V_ORDER.forEach(v => { if (cnt[v] || v === "성장" || v === "하락")
+    box.push(`<div class="stat ${state.verdict === v ? "on" : ""}" data-v="${v}"><b style="color:${V_COLOR[v]}">${cnt[v] || 0}</b><span>${v}</span></div>`); });
+  $("#summary").innerHTML = box.join("");
+  $("#summary").querySelectorAll(".stat").forEach(el => el.onclick = () => { state.verdict = el.dataset.v; state.page = 1; render(); });
+}
+
+/* ---------- 광고주 흐름 차트 ---------- */
+function acctChart(acc, actions, h){
+  const W = 900, H = h, pad = {l:4, r:4, t:8, b:16};
+  const since = addDays(DATA.base_date, -state.days - DATA.window + 1);
+  const pts = acc.series.filter(p => p[0] >= since);
+  if (!pts.length) return "";
+  const n = pts.length, bw = (W - pad.l - pad.r) / n;
+  const maxC = Math.max(1, ...pts.map(p => p[1])), maxR = Math.max(1, ...pts.map(p => p[3]));
+  const y = (v, m) => pad.t + (H - pad.t - pad.b) * (1 - v / m);
+  const idx = {}; pts.forEach((p, i) => idx[p[0]] = i);
+  let s = `<svg viewBox="0 0 ${W} ${H}" width="100%" height="${H}" preserveAspectRatio="none" role="img" aria-label="${esc(acc.name)} 일별 광고비와 전환매출">`;
+  pts.forEach((p, i) => { const yy = y(p[1], maxC);
+    s += `<rect x="${pad.l + i*bw + bw*0.15}" y="${yy}" width="${bw*0.7}" height="${H - pad.b - yy}" fill="var(--bar)"><title>${p[0]} 광고비 ${won(p[1])} · 클릭 ${num(p[2])} · 전환매출 ${won(p[3])}</title></rect>`; });
+  if (pts.some(p => p[3] > 0)) {
+    s += `<polyline fill="none" stroke="var(--lineC)" stroke-width="2" vector-effect="non-scaling-stroke" points="${pts.map((p,i) => `${pad.l + i*bw + bw/2},${y(p[3], maxR)}`).join(" ")}"/>`;
+  }
+  const byDay = {};
+  actions.forEach(a => { if (idx[a.date] != null) (byDay[a.date] = byDay[a.date] || []).push(a); });
+  Object.entries(byDay).forEach(([d, arr]) => {
+    const x = pad.l + idx[d]*bw + bw/2;
+    s += `<line x1="${x}" x2="${x}" y1="${pad.t}" y2="${H - pad.b}" stroke="var(--line)" stroke-dasharray="2 2" vector-effect="non-scaling-stroke"/>`;
+    arr.forEach((a, k) => {
+      s += `<circle cx="${x}" cy="${H - pad.b - 5 - k*9}" r="4" fill="${V_COLOR[a.verdict]}" style="cursor:pointer" data-jump="${esc(a.id)}"><title>${a.date} [${a.verdict}] ${esc(a.campaign)} ${esc(a.adgroup)} · ${esc(a.categories.join(", "))}</title></circle>`;
+    });
+  });
+  [0, Math.floor(n/2), n-1].forEach(i => s += `<text x="${pad.l + i*bw + bw/2}" y="${H-3}" text-anchor="${i===0?"start":i===n-1?"end":"middle"}">${pts[i][0].slice(5)}</text>`);
+  return s + "</svg>";
+}
+
+function renderTimeline(){
+  const list = filtered(false);
+  const accs = DATA.accounts.filter(a => !state.acct || a.customer_id === state.acct)
+    .filter(a => state.acct || list.some(x => x.customer_id === a.customer_id));
+  if (!accs.length) { $("#timeline").innerHTML = '<div class="empty">조건에 맞는 광고주가 없습니다.</div>'; return; }
+  const big = accs.length === 1;
+  $("#timeline").innerHTML = accs.map(acc => {
+    const acts = list.filter(a => a.customer_id === acc.customer_id);
+    const last7 = acc.series.slice(-7).reduce((s,p) => s + p[1], 0) / 7;
+    return `<div class="acctrow" ${big ? 'style="grid-template-columns:1fr"' : ""}>
+      <div class="nm" data-acct="${acc.customer_id}">${esc(acc.name)}<small>${esc(acc.login)} · 7일 일평균 ${won(last7)}</small></div>
+      <div>${acctChart(acc, acts, big ? 220 : 64)}</div>
+      ${big ? "" : `<div class="cnt">변경 ${acts.length}건</div>`}
+    </div>`;
+  }).join("");
+  $("#timeline").querySelectorAll("[data-acct]").forEach(el => el.onclick = () => { $("#fAcct").value = el.dataset.acct; state.acct = el.dataset.acct; state.page = 1; render(); });
+  $("#timeline").querySelectorAll("[data-jump]").forEach(el => el.onclick = () => jump(el.dataset.jump));
+}
+
+function jump(id){
+  const idx = filtered(false).findIndex(a => a.id === id);
+  if (idx < 0) return;
+  if (idx >= state.page * PAGE) { state.page = Math.ceil((idx + 1) / PAGE); renderCards(); }
+  const el = document.getElementById("c-" + id);
+  if (el) { el.scrollIntoView({behavior:"smooth", block:"center"}); el.classList.remove("flash"); void el.offsetWidth; el.classList.add("flash"); }
+}
+
+/* ---------- 카드 ---------- */
+function miniChart(a){
+  const pts = a.chart; if (!pts.length) return "";
+  const W = 360, H = 110, pad = {l:2, r:2, t:8, b:16};
+  const useRev = a.metric !== "clk" && pts.some(p => p[6] > 0);
+  const li = useRev ? 6 : 3;
+  const n = pts.length, bw = (W - pad.l - pad.r) / n;
+  const maxC = Math.max(1, ...pts.map(p => p[4])), maxL = Math.max(1, ...pts.map(p => p[li]));
+  const y = (v, m) => pad.t + (H - pad.t - pad.b) * (1 - v / m);
+  const i0 = pts.findIndex(p => p[1] === 0);
+  let s = `<svg viewBox="0 0 ${W} ${H}" width="100%" height="${H}" preserveAspectRatio="none" role="img" aria-label="변경 전후 일별 추이">`;
+  if (i0 >= 0) {
+    const iEnd = Math.min(n - 1, i0 + DATA.window);
+    s += `<rect x="${pad.l + (i0+1)*bw}" y="${pad.t}" width="${Math.max(0,(iEnd - i0))*bw}" height="${H - pad.t - pad.b}" fill="var(--soft)"/>`;
+  }
+  pts.forEach((p, i) => { const yy = y(p[4], maxC);
+    s += `<rect x="${pad.l + i*bw + bw*0.15}" y="${yy}" width="${bw*0.7}" height="${H - pad.b - yy}" fill="var(--bar)"><title>${p[0]} 광고비 ${won(p[4])} · 노출 ${num(p[2])} · 클릭 ${num(p[3])} · 전환 ${num(p[5],1)} · 매출 ${won(p[6])}</title></rect>`; });
+  s += `<polyline fill="none" stroke="var(--lineC)" stroke-width="2" vector-effect="non-scaling-stroke" points="${pts.map((p,i) => `${pad.l + i*bw + bw/2},${y(p[li], maxL)}`).join(" ")}"/>`;
+  if (i0 >= 0) { const x = pad.l + i0*bw + bw/2;
+    s += `<line x1="${x}" x2="${x}" y1="${pad.t - 4}" y2="${H - pad.b}" stroke="var(--mark)" stroke-width="1.5" vector-effect="non-scaling-stroke"/>`; }
+  s += `<text x="${pad.l}" y="${H-3}">${pts[0][0]}</text>`;
+  if (i0 >= 0) s += `<text x="${pad.l + i0*bw + bw/2}" y="${H-3}" text-anchor="middle">변경일</text>`;
+  s += `<text x="${W - pad.r}" y="${H-3}" text-anchor="end">${pts[n-1][0]}</text>`;
+  return s + `</svg><div class="note" style="margin-top:0">막대 광고비 · 선 ${useRev ? "전환매출" : "클릭"}</div>`;
+}
+
+function kpiTable(a){
+  if (!a.pre || !a.post) return "";
+  const rows = [
+    ["노출", "imp", v => num(v)], ["클릭", "clk", v => num(v)], ["클릭률", "ctr", v => num(v,2) + "%"],
+    ["클릭당 비용", "cpc", won, true], ["광고비", "cost", won], ["전환수", "conv", v => num(v,1)],
+    ["전환매출", "conv_amt", won], ["ROAS", "roas", v => num(v) + "%"],
+  ];
+  return `<table class="kpi"><thead><tr><th>하루 평균</th><th>변경 전 ${a.n_pre}일</th><th>변경 후 ${a.n_post}일</th><th>변화</th></tr></thead><tbody>` +
+    rows.map(([lb, k, f, inv]) => `<tr class="${k === a.metric ? "key" : ""}"><td>${lb}</td><td>${f(a.pre[k])}</td><td>${f(a.post[k])}</td>${pctCell(a.pct[k], inv)}</tr>`).join("") +
+    `</tbody></table>`;
+}
+
+function kwBlock(a){
+  const k = a.kw_perf; if (!k) return "";
+  return `<div class="kw"><b>추가한 키워드 ${k.count}개의 성과</b> (추가 후 ${k.days}일 누적 · 노출된 키워드 ${k.active}개)<br>
+    노출 ${num(k.total.imp)} · 클릭 ${num(k.total.clk)} · 광고비 ${won(k.total.cost)} · 전환 ${num(k.total.conv)} · 매출 ${won(k.total.conv_amt)}
+    <table>${k.top.map(t => `<tr><td>${esc(t.kw)}</td><td>노출 ${num(t.imp)}</td><td>클릭 ${num(t.clk)}</td><td>${won(t.cost)}</td><td>매출 ${won(t.conv_amt)}</td></tr>`).join("")}</table></div>`;
+}
+
+function card(a){
+  const lvl = a.level === "adgroup" ? "광고그룹" : a.level === "campaign" ? "캠페인" : "계정";
+  const path = [`<b>${esc(a.account)}</b>`, a.campaign && esc(a.campaign), a.adgroup && esc(a.adgroup)].filter(Boolean).join(" › ");
+  const show = a.items.slice(0, 3), rest = a.items.length - show.length;
+  const li = i => `<li><span class="t">${esc(i.ts)}</span>${esc(i.detail || i.type)} <span class="src">· ${esc(i.actor || "")}${i.source === "import" ? "" : ""}</span></li>`;
+  let head = "";
+  if (a.pct && a.metric && a.pct[a.metric] != null && a.verdict !== "신규") {
+    const p = a.pct[a.metric];
+    head = `<span style="font-weight:700;color:${p >= 0 ? "var(--up)" : "var(--down)"}">${a.metric === "conv_amt" ? "전환매출" : "클릭"} ${p > 0 ? "+" : ""}${p >= 999 ? "신규" : p.toFixed(0) + "%"}</span>`;
+  }
+  return `<div class="card v-${a.verdict}" id="c-${esc(a.id)}">
+    <div>
+      <div class="hd"><span class="badge b-${a.verdict}">${a.verdict}</span><span class="when">${a.date} ${a.ts.slice(11)}</span>${head}
+        ${a.categories.map(c => `<span class="tag">${c}</span>`).join("")}<span class="tag">${lvl} 단위</span></div>
+      <div class="path">${path}</div>
+      <ul class="items">${show.map(li).join("")}${rest > 0 ? `<li class="more" data-more="${esc(a.id)}">변경 ${rest}건 더 보기 ▾</li>` : ""}</ul>
+      ${kpiTable(a)}
+      <div class="note">${esc(a.note)}</div>
+      ${a.overlap ? `<div class="warn">겹침: 변경 후 ${DATA.window}일 안에 같은 대상을 ${a.overlap}번 더 바꿨습니다. 효과가 섞여 있을 수 있습니다.</div>` : ""}
+    </div>
+    <div>${miniChart(a)}${kwBlock(a)}</div>
+  </div>`;
+}
+
+function renderCards(){
+  const list = filtered(false);
+  $("#listInfo").textContent = `${list.length}건 · 최신순`;
+  if (!list.length) { $("#cards").innerHTML = '<div class="empty panel">조건에 맞는 변경이 없습니다.</div>'; $("#pager").innerHTML = ""; return; }
+  $("#cards").innerHTML = list.slice(0, state.page * PAGE).map(card).join("");
+  $("#pager").innerHTML = list.length > state.page * PAGE ? `<button id="moreBtn">더 보기 (${list.length - state.page*PAGE}건 남음)</button>` : "";
+  const mb = $("#moreBtn"); if (mb) mb.onclick = () => { state.page++; renderCards(); };
+  $("#cards").querySelectorAll("[data-more]").forEach(el => el.onclick = () => {
+    const a = DATA.actions.find(x => x.id === el.dataset.more);
+    const ul = el.parentElement;
+    ul.innerHTML = a.items.map(i => `<li><span class="t">${esc(i.ts)}</span>${esc(i.detail || i.type)} <span class="src">· ${esc(i.actor || "")}</span></li>`).join("");
+  });
+}
+
+function render(){ renderSummary(); renderTimeline(); renderCards(); }
+
+function init(){
+  if (!DATA) { document.body.innerHTML = '<div class="empty">데이터가 없습니다. python main.py build 로 다시 만들어 주세요.</div>'; return; }
+  document.querySelectorAll(".w").forEach(e => e.textContent = DATA.window);
+  document.querySelectorAll(".th").forEach(e => e.textContent = DATA.threshold);
+  $("#meta").textContent = `${DATA.base_date} 성과 기준 · ${DATA.generated_at} 생성 · 광고주 ${DATA.accounts.length}개 · 변경 전후 ${DATA.window}일 비교` + (DATA.owner ? ` · 담당 ${DATA.owner}` : "");
+  $("#fAcct").innerHTML = `<option value="">광고주 전체</option>` + DATA.accounts.map(a => `<option value="${a.customer_id}">${esc(a.name)}${a.n_actions ? ` (${a.n_actions})` : ""}</option>`).join("");
+  $("#fCats").innerHTML = CATS.filter(c => DATA.actions.some(a => a.categories.includes(c))).map(c => `<span class="chip" data-c="${c}">${c}</span>`).join(" ");
+  $("#fCats").querySelectorAll(".chip").forEach(el => el.onclick = () => {
+    state.cats.has(el.dataset.c) ? state.cats.delete(el.dataset.c) : state.cats.add(el.dataset.c);
+    el.classList.toggle("on"); state.page = 1; render(); });
+  $("#fAcct").onchange = e => { state.acct = e.target.value; state.page = 1; render(); };
+  $("#fDays").onchange = e => { state.days = +e.target.value; state.page = 1; render(); };
+  $("#fSys").onchange = e => { state.hideSys = e.target.checked; state.page = 1; render(); };
+  let t; $("#fQ").oninput = e => { clearTimeout(t); t = setTimeout(() => { state.q = e.target.value; state.page = 1; render(); }, 200); };
+  render();
+}
+init();
+</script>
+</body>
+</html>

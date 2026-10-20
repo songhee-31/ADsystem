@@ -1,0 +1,18 @@
+# 비밀 정보 — 절대 올리지 않음
+.env
+*.env
+!.env.example
+data/
+credentials.bin
+*.bin
+
+# 광고주 실적이 들어간 결과 화면
+output/
+
+# 기타
+__pycache__/
+*.pyc
+*.log
+*.db
+*.xlsx
+*.csv

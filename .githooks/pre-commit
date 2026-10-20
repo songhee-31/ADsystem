@@ -1,0 +1,7 @@
+#!/bin/sh
+# 커밋 전에 API 키·비밀 파일이 섞였는지 검사 (git config core.hooksPath .githooks)
+bad=$(git diff --cached --name-only | grep -E '(^|/)(\.env|credentials\.bin|.*\.db)$|^data/|^output/')
+if [ -n "$bad" ]; then echo "커밋 차단: 비밀/데이터 파일 포함 -> $bad"; exit 1; fi
+if git diff --cached -U0 | grep -E '^\+' | grep -Eq '0100000000[0-9a-f]{40,}|AQAAAAA[A-Za-z0-9+/=]{20,}|NAVER_(API|SECRET)_KEY *= *[^ ]+'; then
+  echo "커밋 차단: 네이버 API 키로 보이는 문자열이 있습니다."; exit 1; fi
+exit 0
