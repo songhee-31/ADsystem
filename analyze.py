@@ -114,18 +114,12 @@ class Analyzer:
                 note += f" · 계정 전체({acct_pct:+.0f}%)보다 {lift:+.0f}%p 차이"
         return v, metric, note
 
-    def who(self, actor):
-        """변경자 → 나 / 다른 사람 / 자동 / 미확인"""
-        a = (actor or "").strip()
-        if not a or a == "API 감지":
-            return "미확인"
-        if a.upper() == "SYSTEM":
-            return "자동"
-        return "나" if a.split(":")[0].lower() in self.my_ids else "다른 사람"
+    @staticmethod
+    def who(actor):
+        """네이버가 자동으로 한 변경(SYSTEM)인지, 사람이 직접 한 변경인지"""
+        return "자동" if (actor or "").strip().upper() == "SYSTEM" else "직접"
 
     def run(self):
-        row = self.conn.execute("SELECT value FROM meta WHERE key='my_naver_id'").fetchone()
-        self.my_ids = {i.lower() for i in config.MY_NAVER_IDS} | ({row[0].lower()} if row and row[0] else set())
         since = (self.base - timedelta(days=config.REPORT_DAYS)).isoformat()
         accounts = {r["customer_id"]: dict(r) for r in self.conn.execute("SELECT * FROM accounts")}
         ent = {}
@@ -212,7 +206,7 @@ class Analyzer:
                 "system_only": all((i["actor"] or "").upper() == "SYSTEM" for i in items),
                 "who": sorted({self.who(i["actor"]) for i in items}),
                 "items": [{"ts": i["ts"][11:16], "category": i["category"], "type": i["change_type"],
-                           "actor": i["actor"] if i["actor"] != "API 감지" else "변경자 미확인",
+                           "actor": "" if i["actor"] == "API 감지" else i["actor"],
                            "who": self.who(i["actor"]), "detail": i["detail"], "source": i["source"]} for i in items],
                 "verdict": v, "metric": metric, "note": note,
                 "n_pre": n_pre, "n_post": n_post,

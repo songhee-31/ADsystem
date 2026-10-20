@@ -459,19 +459,6 @@ def collect_stats(conn, api, customer_id, today, log=print):
 
 # ---------------------------------------------------------------- 전체 실행
 
-def my_naver_id():
-    """API 키 주인의 네이버 아이디 (변경이력의 '변경자'와 비교해 '내가 바꾼 것'을 가른다)."""
-    api = NaverAPI(manager_customer_id())
-    for uri in ("/manager-accounts", "/ad-accounts"):
-        try:
-            c = api.get(uri, {"size": 1}).get("content", [])
-            if c and c[0].get("naverId"):
-                return c[0]["naverId"]
-        except NaverAPIError:
-            pass
-    return ""
-
-
 def list_accounts(log=print):
     """관리계정(기본: 내가 OWNER인 관리계정) 아래 광고주 목록. X-Customer 에는 customerId 를 쓴다."""
     api = NaverAPI(manager_customer_id())

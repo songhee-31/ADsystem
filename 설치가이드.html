@@ -253,7 +253,7 @@ CUSTOMER_ID (숫자): <span class="in">1234567</span>
       <ol style="list-style:none;padding-left:0">
         <li><span class="mark">1</span><b>왼쪽 광고주 목록</b>: 최근 7일 광고비 순. <span class="pill r">▼</span> 바꾼 뒤 하락한 건, <span class="pill g">▲</span> 성장한 건이 있다는 뜻</li>
         <li><span class="mark">2</span><b>성과 그래프</b>: 광고비·클릭·전환매출·ROAS 중 하나씩. <b>세로 점선 = 바꾼 날</b>. 점선을 누르면 무엇을 바꿨고 결과가 어땠는지 나옵니다</li>
-        <li><span class="mark">3</span><b>변경 내역</b>: 위 버튼으로 입찰가·타겟팅·제외키워드 등 종류와 <b>바꾼 사람(나 / 다른 사람 / 자동 / 미확인)</b>을 고르고, 줄을 누르면 바꾸기 전·후 7일 비교가 나옵니다</li>
+        <li><span class="mark">3</span><b>변경 내역</b>: 위 버튼으로 입찰가·타겟팅·제외키워드 등 종류와 <b>직접 변경 / 자동(SYSTEM)</b>을 고르고, 줄을 누르면 바꾸기 전·후 7일 비교가 나옵니다</li>
       </ol>
       <div class="tbl"><table>
         <tr><th>표시</th><th>뜻</th></tr>
@@ -297,7 +297,7 @@ CUSTOMER_ID (숫자): <span class="in">1234567</span>
     <tr><td>로그에 <b>✖ 광고주이름</b>이 있어요</td><td>그 광고주만 실패한 것이고 나머지는 정상입니다. 해당 광고주 권한이나 계정 상태를 확인하세요.</td></tr>
     <tr><td>로그에 <b>403</b> 또는 <b>키가 등록되지 않았습니다</b></td><td>키가 바뀌었거나 만료된 것입니다. setup.bat을 다시 실행해 새 키를 넣으세요.</td></tr>
     <tr><td>입찰가 변경이 안 보여요</td><td>입찰가·예산·ON/OFF는 설치 <b>다음 날부터</b> 매일 전날과 비교해 잡힙니다. 그 전 이력이 필요하면 광고센터 <b>도구 → 변경 이력 관리</b>에서 엑셀을 받아 <span class="path">data\inbox\광고주로그인ID\</span>에 넣으세요. 다음 수집 때 반영됩니다.</td></tr>
-    <tr><td>'변경자 미확인'이 많아요</td><td>네이버 API는 누가 바꿨는지 알려주지 않습니다. 광고센터 <b>도구 → 변경 이력 관리</b> 엑셀을 <span class="path">data\inbox\광고주로그인ID\</span>에 넣으면 변경자가 채워지고, 내 아이디로 바꾼 건 '나', 다른 아이디는 '다른 사람'으로 나뉩니다.</td></tr>
+    <tr><td>자동(SYSTEM)이 뭔가요?</td><td>네이버가 자동으로 한 변경입니다(예: 확장소재 자동 등록). 사람이 한 변경만 보려면 <b>직접 변경</b> 버튼을 누르세요.</td></tr>
     <tr><td>PC를 바꿨어요</td><td>키는 PC마다 따로 암호화됩니다. 새 PC에서 ZIP을 풀고 setup.bat을 다시 실행하세요.</td></tr>
     <tr><td>키나 관리계정을 바꾸고 싶어요</td><td>setup.bat을 다시 실행하면 됩니다. 수집한 데이터는 그대로 남습니다.</td></tr>
   </table></div>

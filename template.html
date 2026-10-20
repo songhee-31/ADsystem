@@ -157,7 +157,7 @@ details.help summary{cursor:pointer}
         <div class="seg" id="whoSeg"></div>
         <span id="whoHint" style="font-size:12px;color:var(--sub)"></span>
       </div>
-      <div style="font-size:12.5px;color:var(--sub);padding:8px 14px;border-bottom:1px solid var(--line)">줄을 누르면 바꾸기 전·후 7일을 비교해서 보여줍니다. 위 버튼으로 종류나 바꾼 사람을 고르면 그래프 점선도 같이 바뀝니다.</div>
+      <div style="font-size:12.5px;color:var(--sub);padding:8px 14px;border-bottom:1px solid var(--line)">줄을 누르면 바꾸기 전·후 7일을 비교해서 보여줍니다. 위 버튼으로 종류나 직접/자동을 고르면 그래프 점선도 같이 바뀝니다.</div>
       <table class="list">
         <thead><tr><th style="width:110px">날짜</th><th>바꾼 것</th><th class="hide-m">대상</th><th style="width:150px">결과</th></tr></thead>
         <tbody id="rows"></tbody>
@@ -179,7 +179,7 @@ const DATA = /*__DATA__*/null;
 const METRICS = {cost:{lb:"광고비", f:v=>won(v)}, clk:{lb:"클릭", f:v=>num(v)+"회"}, conv_amt:{lb:"전환매출", f:v=>won(v)}, roas:{lb:"ROAS", f:v=>num(v)+"%"}};
 const st = {acc:null, metric:"cost", range:30, who:"", open:null, q:"", cat:""};
 const CATS = ["입찰가", "타겟팅", "제외키워드", "예산", "ON·OFF", "키워드", "소재", "구조"];
-const WHO = [["나", "내가 바꾼 것"], ["다른 사람", "다른 사람"], ["자동", "자동(SYSTEM)"], ["미확인", "변경자 미확인"]];
+const WHO = [["직접", "직접 변경"], ["자동", "자동(SYSTEM)"]];
 const $ = s => document.querySelector(s);
 const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
 const num = v => v == null ? "-" : Math.round(v).toLocaleString("ko-KR");
@@ -341,7 +341,7 @@ function toggleDetail(tr, a){
     <div class="dmore">바꾸기 전 ${a.n_pre}일 → 바꾼 뒤 ${a.n_post}일 비교 · ${esc(a.note)}</div>` : `<div class="dmore">${esc(a.note)}</div>`;
   const kw = a.kw_perf ? `<div class="dmore"><b>추가한 키워드 ${a.kw_perf.count}개</b>: 클릭 ${num(a.kw_perf.total.clk)} · 광고비 ${won(a.kw_perf.total.cost)} · 매출 ${won(a.kw_perf.total.conv_amt)}
     (${a.kw_perf.top.slice(0, 5).map(t => esc(t.kw)).join(", ")})</div>` : "";
-  const items = a.items.length > 1 ? `<ul class="dmore">${a.items.slice(0, 12).map(i => `<li>${esc(i.ts)} ${esc(cut(i.detail || i.type, 140))} <span style="color:var(--mute)">· ${esc(i.actor)}</span></li>`).join("")}${a.items.length > 12 ? `<li>외 ${a.items.length - 12}건</li>` : ""}</ul>` : "";
+  const items = a.items.length > 1 ? `<ul class="dmore">${a.items.slice(0, 12).map(i => `<li>${esc(i.ts)} ${esc(cut(i.detail || i.type, 140))} ${i.actor ? `<span style="color:var(--mute)">· ${esc(i.actor)}</span>` : ""}</li>`).join("")}${a.items.length > 12 ? `<li>외 ${a.items.length - 12}건</li>` : ""}</ul>` : "";
   const row = document.createElement("tr");
   row.className = "detail";
   row.innerHTML = `<td colspan="4">${cmp}${kw}${items}</td>`;
@@ -359,11 +359,10 @@ function renderCats(acc){
 function renderWho(acc){
   const all = actsOf(acc.customer_id, false, true);
   const n = w => all.filter(a => (a.who || []).includes(w)).length;
-  $("#whoSeg").innerHTML = `<button data-w="" class="${!st.who ? "on" : ""}">바꾼 사람 전체</button>` +
+  $("#whoSeg").innerHTML = `<button data-w="" class="${!st.who ? "on" : ""}">전체</button>` +
     WHO.map(([w, lb]) => `<button data-w="${w}" class="${st.who === w ? "on" : ""}" ${n(w) ? "" : 'style="opacity:.45"'}>${lb} ${n(w)}</button>`).join("");
   $("#whoSeg").querySelectorAll("button").forEach(b => b.onclick = () => { st.who = b.dataset.w; st.open = null; renderAll(); });
-  const unk = n("미확인");
-  $("#whoHint").textContent = unk ? "변경자는 광고센터 변경이력 엑셀을 넣으면 채워집니다" : "";
+  $("#whoHint").textContent = "자동(SYSTEM) = 네이버가 자동으로 한 변경 (예: 확장소재 자동 등록)";
 }
 
 /* ---------- 전체 ---------- */

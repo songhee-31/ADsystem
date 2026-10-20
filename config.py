@@ -36,8 +36,6 @@ BACKFILL_DAYS = int(os.environ.get("BACKFILL_DAYS", "35"))     # 처음 실행 �
 WINDOW_DAYS = int(os.environ.get("WINDOW_DAYS", "7"))          # 변경 전/후 비교 기간
 REPORT_DAYS = int(os.environ.get("REPORT_DAYS", "60"))         # 화면에 보여줄 변경 기간
 THRESHOLD_PCT = float(os.environ.get("THRESHOLD_PCT", "15"))   # 성장/하락 판정 기준(%)
-# '내가 바꾼 것'으로 볼 네이버 아이디 (쉼표). 비우면 API 키 주인 아이디를 자동으로 사용
-MY_NAVER_IDS = [a.strip() for a in os.environ.get("MY_NAVER_IDS", "").split(",") if a.strip()]
 MIN_CLICKS = int(os.environ.get("MIN_CLICKS", "30"))           # 변경 전후 클릭 합이 이보다 적으면 판정 보류
 WORKERS =int(os.environ.get("WORKERS", "3"))                  # 동시에 처리할 광고주 수
 OWNER_NAME = os.environ.get("OWNER_NAME", "")

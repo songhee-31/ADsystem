@@ -71,9 +71,6 @@ def _run():
     log("광고주 목록 조회")
     accounts = collector.list_accounts(log)
     now = datetime.now().isoformat(timespec="minutes")
-    me = collector.my_naver_id()
-    if me:
-        conn.execute("INSERT OR REPLACE INTO meta VALUES ('my_naver_id', ?)", (me,))
     for a in accounts:
         conn.execute("INSERT OR REPLACE INTO accounts VALUES (?,?,?,?)", (a["customer_id"], a["login_id"], a["name"], now))
     conn.commit()
