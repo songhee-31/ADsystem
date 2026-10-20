@@ -56,6 +56,10 @@ CREATE TABLE IF NOT EXISTS change_events (
     detail        TEXT,
     source        TEXT         -- api / import / demo
 );
+CREATE TABLE IF NOT EXISTS meta (
+    key   TEXT PRIMARY KEY,
+    value TEXT
+);
 CREATE INDEX IF NOT EXISTS ix_events_date ON change_events(customer_id, date);
 CREATE INDEX IF NOT EXISTS ix_stats ON daily_stats(customer_id, level, entity_id);
 """

@@ -34,6 +34,8 @@ def categorize(change_type, detail=""):
         return "입찰가"
     if "ON" in s.upper() and "OFF" in s.upper() or "중지" in s or "활성" in s:
         return "ON·OFF"
+    if "제외" in s and "키워드" in s:
+        return "제외키워드"
     if "키워드" in s:
         return "키워드"
     if "확장소재" in s or "소재" in s:

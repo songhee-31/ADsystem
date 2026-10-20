@@ -77,15 +77,32 @@ def take_snapshot(api: NaverAPI, log=print):
             "cnts_bid": g.get("contentsNetworkBidAmt"), "use_cnts_bid": g.get("useCntsNetworkBidAmt"),
             "reg": g.get("regTm"), "edit": g.get("editTm"), "targets": {},
         }
+        neg = {}  # 제외키워드 {키워드: 등록시각(ISO, UTC)}
         if target_ok:
             try:
                 for t in api.targets(gid):
                     tp = t.get("targetTp")
-                    if tp:
+                    if tp == "RESTRICT_KEYWORD_TARGET":
+                        # 쇼핑 검색광고의 제외키워드: 키워드별 등록 시각(date, epoch 초)이 있다
+                        for r in t.get("target") or []:
+                            if r.get("keyword"):
+                                ts = r.get("date")
+                                neg[r["keyword"]] = (datetime.fromtimestamp(ts, timezone.utc).isoformat().replace("+00:00", "Z")
+                                                     if isinstance(ts, (int, float)) else t.get("editTm") or "")
+                    elif tp:
                         item["targets"][tp] = json.dumps(t.get("target"), ensure_ascii=False, sort_keys=True)
             except NaverAPIError as e:
                 log(f"   (타겟팅 조회 불가 → 타겟팅 변경은 엑셀 업로드로만 반영) {e}")
                 target_ok = False
+        try:
+            # 파워링크 등의 제외키워드
+            for r in api.get(f"/ncc/adgroups/{gid}/restricted-keywords", {"type": "KEYWORD_PLUS_RESTRICT"}) or []:
+                if r.get("keyword") and not r.get("delFlag"):
+                    neg.setdefault(r["keyword"], r.get("regTm") or "")
+            item["neg_kw"] = neg
+        except NaverAPIError:
+            if neg:
+                item["neg_kw"] = neg
         # 요일/시간·연령·성별·지역 타겟팅(criterion). 마지막 수정 시각(editTm)도 함께 저장
         try:
             crit = {}
@@ -201,6 +218,8 @@ def diff_snapshots(customer_id, prev, cur):
         pt, gt = p.get("targets") or {}, g.get("targets") or {}
         if pt and gt:
             for tp in sorted(set(pt) | set(gt)):
+                if tp == "RESTRICT_KEYWORD_TARGET":  # 제외키워드는 아래에서 키워드 단위로 비교
+                    continue
                 if pt.get(tp) != gt.get(tp):
                     add(t, "타겟팅", "타겟팅 변경", cid, gid, f"{TARGET_NAMES.get(tp, tp)} 타겟팅 변경")
         pc, gc = p.get("criteria"), g.get("criteria")
@@ -211,6 +230,14 @@ def diff_snapshots(customer_id, prev, cur):
                     ct = to_kst((gc.get(tp) or {}).get("edit"))
                     tt = ct if ct and prev_time - timedelta(hours=1) <= ct <= cur_time + timedelta(hours=1) else t
                     add(tt, "타겟팅", "타겟팅 변경", cid, gid, describe_criteria(tp, bi, ai))
+        pn, gn = p.get("neg_kw"), g.get("neg_kw")
+        if pn is not None and gn is not None:
+            for kw in sorted(set(gn) - set(pn)):
+                kt = to_kst(gn[kw])
+                add(kt if kt and prev_time - timedelta(hours=1) <= kt <= cur_time + timedelta(hours=1) else t,
+                    "제외키워드", "제외키워드 추가", cid, gid, kw)
+            for kw in sorted(set(pn) - set(gn)):
+                add(t, "제외키워드", "제외키워드 삭제", cid, gid, kw)
     for gid, p in prev["adgroups"].items():
         if gid not in cur["adgroups"]:
             add(datetime.combine(fallback_day, datetime.min.time(), KST), "구조", "광고그룹 삭제",
@@ -257,7 +284,7 @@ def diff_snapshots(customer_id, prev, cur):
     events = []
     for (day, category, change_type, cid, gid), b in buckets.items():
         lines = b["lines"]
-        if category in ("키워드", "소재") or (category in ("입찰가", "ON·OFF") and len(lines) > 1):
+        if category in ("키워드", "소재", "제외키워드") or (category in ("입찰가", "ON·OFF") and len(lines) > 1):
             detail = f"{change_type} {len(lines)}건: " + ", ".join(lines[:15]) + (" 외" if len(lines) > 15 else "")
         else:
             detail = " / ".join(lines)
@@ -316,6 +343,34 @@ def targeting_backfill_events(customer_id, snap, since_day):
     return events
 
 
+def negkw_backfill_events(customer_id, snap, since_day):
+    """제외키워드 등록 시각으로 과거 '제외키워드 추가'를 채운다 (광고그룹·날짜별로 묶음)."""
+    buckets = {}
+    for gid, g in snap["adgroups"].items():
+        for kw, reg in (g.get("neg_kw") or {}).items():
+            t = to_kst(reg)
+            if not t or t.date().isoformat() < since_day:
+                continue
+            b = buckets.setdefault((gid, t.date().isoformat()), {"kws": [], "ts": t})
+            b["kws"].append(kw)
+            b["ts"] = max(b["ts"], t)
+    events = []
+    for (gid, day), b in buckets.items():
+        g = snap["adgroups"][gid]
+        cid = g.get("campaign_id")
+        kws = sorted(b["kws"])
+        events.append({
+            "uid": db.event_uid("negkw", customer_id, day, gid), "customer_id": customer_id,
+            "ts": b["ts"].strftime("%Y-%m-%d %H:%M"), "date": day, "category": "제외키워드",
+            "change_type": "제외키워드 추가", "actor": "API 감지", "campaign_id": cid,
+            "campaign_name": snap["campaigns"].get(cid, {}).get("name", ""), "adgroup_id": gid,
+            "adgroup_name": g.get("name", ""), "keyword_ids": "",
+            "detail": f"제외키워드 추가 {len(kws)}건: " + ", ".join(kws[:15]) + (" 외" if len(kws) > 15 else ""),
+            "source": "api",
+        })
+    return events
+
+
 def save_entities(conn, customer_id, snap):
     rows = []
     for cid, c in snap["campaigns"].items():
@@ -343,6 +398,8 @@ def collect_structure(conn, api, customer_id, today, log=print):
     # 이전 스냅샷에 타겟팅 조건 정보가 없으면(첫 실행·업데이트 직후) 수정 시각으로 과거 타겟팅 변경을 채운다
     if not prev or any("criteria" not in g for g in prev["adgroups"].values()):
         events += targeting_backfill_events(customer_id, snap, since)
+    if not prev or any("neg_kw" not in g for g in prev["adgroups"].values()):
+        events += negkw_backfill_events(customer_id, snap, since)
     return db.insert_events(conn, events), snap
 
 
@@ -401,6 +458,19 @@ def collect_stats(conn, api, customer_id, today, log=print):
 
 
 # ---------------------------------------------------------------- 전체 실행
+
+def my_naver_id():
+    """API 키 주인의 네이버 아이디 (변경이력의 '변경자'와 비교해 '내가 바꾼 것'을 가른다)."""
+    api = NaverAPI(manager_customer_id())
+    for uri in ("/manager-accounts", "/ad-accounts"):
+        try:
+            c = api.get(uri, {"size": 1}).get("content", [])
+            if c and c[0].get("naverId"):
+                return c[0]["naverId"]
+        except NaverAPIError:
+            pass
+    return ""
+
 
 def list_accounts(log=print):
     """관리계정(기본: 내가 OWNER인 관리계정) 아래 광고주 목록. X-Customer 에는 customerId 를 쓴다."""
