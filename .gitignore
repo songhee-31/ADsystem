@@ -16,3 +16,6 @@ __pycache__/
 *.db
 *.xlsx
 *.csv
+
+# 배포 묶음
+dist/

@@ -8,6 +8,7 @@
   python main.py demo      API 없이 예시 데이터로 화면 미리보기
   python main.py setkey    API 키 등록/변경 (암호화 저장, 화면에 표시 안 됨)
   python main.py migrate-keys  .env 에 평문으로 있던 키를 암호화 저장소로 옮기고 .env 에서 지움
+  처음 설치·키 변경은 setup.bat(=python setup_wizard.py) 을 쓰세요.
 """
 import json
 import sys
@@ -19,9 +20,19 @@ import config
 import db
 
 
+# 작업 스케줄러(pythonw)로 돌 때는 콘솔이 없고, 한글 콘솔은 cp949 라서 출력이 깨지거나 멈출 수 있다
+for _s in (sys.stdout, sys.stderr):
+    if _s is not None and hasattr(_s, "reconfigure"):
+        _s.reconfigure(encoding="utf-8", errors="replace")
+
+
 def log(msg):
-    line = f"[{datetime.now():%H:%M:%S}] {msg}"
-    print(line, flush=True)
+    line = f"[{datetime.now():%Y-%m-%d %H:%M:%S}] {msg}"
+    if sys.stdout is not None:
+        try:
+            print(line, flush=True)
+        except OSError:
+            pass
     with open(config.DATA_DIR / "run.log", "a", encoding="utf-8") as f:
         f.write(line + "\n")
 
@@ -33,6 +44,25 @@ def cmd_accounts():
 
 
 def cmd_run():
+    """중복 실행 방지 + 오류를 run.log 에 남긴다."""
+    lock = config.DATA_DIR / "running.lock"
+    if lock.exists() and time.time() - lock.stat().st_mtime < 3 * 3600:
+        log("이미 수집이 진행 중이라 이번 실행은 건너뜁니다.")
+        return
+    lock.write_text(str(datetime.now()), encoding="utf-8")
+    try:
+        _run()
+    except Exception as e:
+        import traceback
+        log(f"✖ 실행 실패: {type(e).__name__}: {e}")
+        with open(config.DATA_DIR / "run.log", "a", encoding="utf-8") as f:
+            f.write(traceback.format_exc() + "\n")
+        raise SystemExit(1)
+    finally:
+        lock.unlink(missing_ok=True)
+
+
+def _run():
     import collector
     from import_history import import_inbox
     conn = db.connect()

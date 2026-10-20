@@ -1,5 +1,8 @@
 @echo off
-rem 매일 실행: API 수집 -> 변경이력 엑셀 가져오기 -> output\index.html 생성
+rem 지금 바로 수집하고 싶을 때 더블클릭 (매일 자동 실행은 setup.bat 에서 등록)
+chcp 65001 >nul
 cd /d "%~dp0"
-set PYTHONIOENCODING=utf-8
-python main.py run
+set "PY=python"
+python --version >nul 2>nul || set "PY=py -3"
+%PY% main.py run
+pause
