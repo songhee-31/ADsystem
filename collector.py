@@ -19,7 +19,32 @@ TARGET_NAMES = {
     "PC_MOBILE_TARGET": "PC/모바일",
     "SEX_TARGET": "성별",
     "AGE_TARGET": "연령",
+    "NON_SEARCH_KEYWORD_TARGET": "검색어 외 노출",
+    "RESTRICT_KEYWORD_TARGET": "제외 키워드",
 }
+CRITERION_NAMES = {"SD": "요일/시간", "AG": "연령", "GN": "성별", "RL": "지역"}
+
+
+def describe_criteria(tp, before, after):
+    """타겟팅 조건 변화를 사람이 읽는 문장으로. before/after: {code: [이름, 가중치, 제외여부, 사용여부]}"""
+    parts = []
+    for code in sorted(set(before) | set(after)):
+        b, a = before.get(code), after.get(code)
+        name = (a or b)[0]
+        if tp == "SD":
+            name = name.replace("요일 ", " ").replace("시부터 ", "~").replace("시까지", "시")
+        if b and not a:
+            parts.append(f"{name} 해제")
+        elif a and not b:
+            parts.append(f"{name} {'제외' if a[2] else '추가'}")
+        elif b[2] != a[2] or b[3] != a[3]:
+            parts.append(f"{name} {'제외' if a[2] or not a[3] else '노출'}로 변경")
+        elif b[1] != a[1]:
+            parts.append(f"{name} 가중치 {b[1]}%→{a[1]}%")
+    label = CRITERION_NAMES.get(tp, tp)
+    if not parts:
+        return f"{label} 타겟팅 변경"
+    return f"{label}: " + ", ".join(parts[:5]) + (f" 외 {len(parts) - 5}건" if len(parts) > 5 else "")
 
 
 def to_kst(ts):
@@ -61,6 +86,19 @@ def take_snapshot(api: NaverAPI, log=print):
             except NaverAPIError as e:
                 log(f"   (타겟팅 조회 불가 → 타겟팅 변경은 엑셀 업로드로만 반영) {e}")
                 target_ok = False
+        # 요일/시간·연령·성별·지역 타겟팅(criterion). 마지막 수정 시각(editTm)도 함께 저장
+        try:
+            crit = {}
+            for c in api.get(f"/ncc/criterion/{gid}") or []:
+                if c.get("delFlag"):
+                    continue
+                tp = c.get("type")
+                d = crit.setdefault(tp, {"items": {}, "edit": ""})
+                d["items"][c.get("dictionaryCode")] = [c.get("codeName"), c.get("bidWeight"), bool(c.get("negative")), bool(c.get("enable", True))]
+                d["edit"] = max(d["edit"], c.get("editTm") or "", c.get("regTm") or "")
+            item["criteria"] = crit
+        except NaverAPIError:
+            pass
         snap["adgroups"][gid] = item
         for k in api.keywords(gid):
             snap["keywords"][k["nccKeywordId"]] = {
@@ -164,7 +202,15 @@ def diff_snapshots(customer_id, prev, cur):
         if pt and gt:
             for tp in sorted(set(pt) | set(gt)):
                 if pt.get(tp) != gt.get(tp):
-                    add(t, "타겟팅", "타겟팅 변경", cid, gid, f"{TARGET_NAMES.get(tp, tp)} 타겟팅을 변경")
+                    add(t, "타겟팅", "타겟팅 변경", cid, gid, f"{TARGET_NAMES.get(tp, tp)} 타겟팅 변경")
+        pc, gc = p.get("criteria"), g.get("criteria")
+        if pc is not None and gc is not None:
+            for tp in sorted(set(pc) | set(gc)):
+                bi, ai = (pc.get(tp) or {}).get("items", {}), (gc.get(tp) or {}).get("items", {})
+                if bi != ai:
+                    ct = to_kst((gc.get(tp) or {}).get("edit"))
+                    tt = ct if ct and prev_time - timedelta(hours=1) <= ct <= cur_time + timedelta(hours=1) else t
+                    add(tt, "타겟팅", "타겟팅 변경", cid, gid, describe_criteria(tp, bi, ai))
     for gid, p in prev["adgroups"].items():
         if gid not in cur["adgroups"]:
             add(datetime.combine(fallback_day, datetime.min.time(), KST), "구조", "광고그룹 삭제",
@@ -240,6 +286,36 @@ def baseline_events(customer_id, snap, since_day):
     return [e for e in events if e["change_type"].endswith("추가")]
 
 
+def targeting_backfill_events(customer_id, snap, since_day):
+    """타겟팅 조건의 마지막 수정 시각(editTm)으로 과거 타겟팅 변경을 채운다 (조건별 가장 최근 1회)."""
+    events = []
+    # 한 번도 설정하지 않은 기본 타겟팅은 조회 시각이 수정 시각으로 돌아온다 → 스냅샷 직전 시각 이후 값은 무시
+    taken = datetime.fromisoformat(snap["taken_at"]) - timedelta(minutes=30)
+    for gid, g in snap["adgroups"].items():
+        for tp, d in (g.get("criteria") or {}).items():
+            t = to_kst(d.get("edit"))
+            if not t or t.date().isoformat() < since_day or t >= taken:
+                continue
+            label = CRITERION_NAMES.get(tp, tp)
+            excl = [v[0] for v in d["items"].values() if v[2] or not v[3]]
+            if tp == "SD":
+                on = sum(1 for v in d["items"].values() if not v[2] and v[3])
+                detail = f"{label} 타겟팅 변경 (현재 노출 시간대 {on}개)"
+            elif excl:
+                detail = f"{label} 타겟팅 변경 (현재 제외: {', '.join(excl[:3])}{' 외' if len(excl) > 3 else ''})"
+            else:
+                detail = f"{label} 타겟팅 변경"
+            day = t.date().isoformat()
+            cid = g.get("campaign_id")
+            events.append({
+                "uid": db.event_uid("crit", customer_id, day, gid, tp), "customer_id": customer_id,
+                "ts": t.strftime("%Y-%m-%d %H:%M"), "date": day, "category": "타겟팅", "change_type": "타겟팅 변경",
+                "actor": "API 감지", "campaign_id": cid, "campaign_name": snap["campaigns"].get(cid, {}).get("name", ""),
+                "adgroup_id": gid, "adgroup_name": g.get("name", ""), "keyword_ids": "", "detail": detail, "source": "api",
+            })
+    return events
+
+
 def save_entities(conn, customer_id, snap):
     rows = []
     for cid, c in snap["campaigns"].items():
@@ -259,11 +335,14 @@ def collect_structure(conn, api, customer_id, today, log=print):
     path.write_text(json.dumps(snap, ensure_ascii=False), encoding="utf-8")
     save_entities(conn, customer_id, snap)
     prev = latest_snapshot(customer_id, today)
+    since = (date.fromisoformat(today) - timedelta(days=config.BACKFILL_DAYS)).isoformat()
     if prev:
         events = diff_snapshots(customer_id, prev, snap)
     else:
-        since = (date.fromisoformat(today) - timedelta(days=config.BACKFILL_DAYS)).isoformat()
         events = baseline_events(customer_id, snap, since)
+    # 이전 스냅샷에 타겟팅 조건 정보가 없으면(첫 실행·업데이트 직후) 수정 시각으로 과거 타겟팅 변경을 채운다
+    if not prev or any("criteria" not in g for g in prev["adgroups"].values()):
+        events += targeting_backfill_events(customer_id, snap, since)
     return db.insert_events(conn, events), snap
 
 

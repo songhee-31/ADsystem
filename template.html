@@ -95,7 +95,8 @@ table.list{width:100%;border-collapse:collapse}
 .up{color:var(--good)} .dn{color:var(--bad)} .z{color:var(--flat)}
 .dmore{margin-top:10px;font-size:12.5px;color:var(--sub)}
 .dmore li{margin:2px 0}
-.tools{display:flex;justify-content:space-between;align-items:center;padding:10px 14px;border-bottom:1px solid var(--line)}
+.tools{display:flex;flex-wrap:wrap;gap:8px;justify-content:space-between;align-items:center;padding:10px 14px;border-bottom:1px solid var(--line)}
+#catSeg{flex-wrap:wrap}
 .tools label{font-size:12.5px;color:var(--sub);display:flex;gap:5px;align-items:center}
 .empty{padding:28px;text-align:center;color:var(--mute)}
 details.help{margin-top:30px;color:var(--sub);font-size:12.5px}
@@ -150,9 +151,10 @@ details.help summary{cursor:pointer}
     <h2>변경 내역 <small id="cnt"></small></h2>
     <div class="card">
       <div class="tools">
-        <span style="font-size:12.5px;color:var(--sub)">줄을 누르면 바꾸기 전·후 7일을 비교해서 보여줍니다</span>
+        <div class="seg" id="catSeg"></div>
         <label><input type="checkbox" id="sys" checked> 자동(SYSTEM) 변경 숨기기</label>
       </div>
+      <div style="font-size:12.5px;color:var(--sub);padding:8px 14px;border-bottom:1px solid var(--line)">줄을 누르면 바꾸기 전·후 7일을 비교해서 보여줍니다. 위 버튼으로 변경 종류를 고르면 그래프 점선도 같이 바뀝니다.</div>
       <table class="list">
         <thead><tr><th style="width:110px">날짜</th><th>바꾼 것</th><th class="hide-m">대상</th><th style="width:150px">결과</th></tr></thead>
         <tbody id="rows"></tbody>
@@ -172,7 +174,8 @@ details.help summary{cursor:pointer}
 <script>
 const DATA = /*__DATA__*/null;
 const METRICS = {cost:{lb:"광고비", f:v=>won(v)}, clk:{lb:"클릭", f:v=>num(v)+"회"}, conv_amt:{lb:"전환매출", f:v=>won(v)}, roas:{lb:"ROAS", f:v=>num(v)+"%"}};
-const st = {acc:null, metric:"cost", range:30, sys:true, open:null, q:""};
+const st = {acc:null, metric:"cost", range:30, sys:true, open:null, q:"", cat:""};
+const CATS = ["입찰가", "타겟팅", "예산", "ON·OFF", "키워드", "소재", "구조"];
 const $ = s => document.querySelector(s);
 const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
 const num = v => v == null ? "-" : Math.round(v).toLocaleString("ko-KR");
@@ -185,13 +188,15 @@ const WD = "일월화수목금토";
 const cut = (t, n) => t.length > n ? t.slice(0, n) + "…" : t;
 const dlabel = d => { const x = new Date(d + "T00:00:00"); return `${d.slice(5).replace("-", ".")} (${WD[x.getDay()]})`; };
 
-function actsOf(cid){ return DATA.actions.filter(a => a.customer_id === cid && (!st.sys || !a.system_only)); }
+function actsOf(cid, ignoreCat){ return DATA.actions.filter(a => a.customer_id === cid && (!st.sys || !a.system_only) && (ignoreCat || !st.cat || a.categories.includes(st.cat))); }
+const PRI = c => { const i = CATS.indexOf(c); return c === st.cat ? -1 : i < 0 ? 99 : i; };
+const sortedItems = a => [...a.items].sort((x, y) => PRI(x.category) - PRI(y.category));
 function sumTxt(a){
-  const it = a.items[0]; let s = it.detail || it.type;
+  const it = sortedItems(a)[0]; let s = it.detail || it.type;
   if (s.length > 46) s = s.slice(0, 46) + "…";
   return a.items.length > 1 ? `${s} 외 ${a.items.length - 1}건` : s;
 }
-function whatTxt(a){ return [...new Set(a.items.map(i => i.type))].slice(0, 2).join(", "); }
+function whatTxt(a){ return [...new Set(sortedItems(a).map(i => i.type))].slice(0, 2).join(", "); }
 function resultHTML(a){
   const p = a.metric ? a.pct[a.metric] : null;
   const lb = a.metric === "conv_amt" ? "매출" : a.metric === "clk" ? "클릭" : "";
@@ -335,13 +340,22 @@ function toggleDetail(tr, a){
   tr.after(row);
 }
 
+/* ---------- 변경 종류 필터 ---------- */
+function renderCats(acc){
+  const all = actsOf(acc.customer_id, true);
+  const n = c => all.filter(a => a.categories.includes(c)).length;
+  $("#catSeg").innerHTML = `<button data-c="" class="${!st.cat ? "on" : ""}">전체 ${all.length}</button>` +
+    CATS.map(c => `<button data-c="${c}" class="${st.cat === c ? "on" : ""}" ${n(c) ? "" : 'style="opacity:.45"'}>${c} ${n(c)}</button>`).join("");
+  $("#catSeg").querySelectorAll("button").forEach(b => b.onclick = () => { st.cat = b.dataset.c; st.open = null; renderAll(); });
+}
+
 /* ---------- 전체 ---------- */
 function cur(){ return DATA.accounts.find(a => a.customer_id === st.acc); }
 function renderAll(){
   const acc = cur(), acts = actsOf(acc.customer_id);
   $("#title").textContent = acc.name;
   $("#crumb").textContent = `${acc.login ? acc.login + " · " : ""}${DATA.base_date} 성과까지 반영 · ${DATA.generated_at} 갱신`;
-  renderSide(); renderSummary(acc, acts); renderChart(acc, acts); renderRows(acts);
+  renderSide(); renderSummary(acc, actsOf(acc.customer_id, true)); renderCats(acc); renderChart(acc, acts); renderRows(acts);
 }
 function segs(){
   $("#metricSeg").innerHTML = Object.entries(METRICS).map(([k, m]) => `<button data-m="${k}" class="${k === st.metric ? "on" : ""}">${m.lb}</button>`).join("");
