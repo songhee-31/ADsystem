@@ -362,6 +362,7 @@ def run_account(conn, acc, today):
     msgs = []
     log = msgs.append
     cid = acc["customer_id"]
+    conn = db.connect()  # 스레드마다 별도 연결 (sqlite 연결은 스레드 간 공유 불가)
     try:
         api = NaverAPI(cid)
         n_ev, _ = collect_structure(conn, api, cid, today, log)
@@ -369,4 +370,8 @@ def run_account(conn, acc, today):
         log(f"✔ {acc['name']} ({acc['login_id']}): 변경 {n_ev}건 감지, 성과 {n_days}일 수집")
     except NaverAPIError as e:
         log(f"✖ {acc['name']} ({acc['login_id']}): {e}")
+    except Exception as e:  # 한 광고주 오류로 전체가 멈추지 않게
+        log(f"✖ {acc['name']} ({acc['login_id']}): {type(e).__name__}: {e}")
+    finally:
+        conn.close()
     return msgs

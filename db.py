@@ -64,6 +64,7 @@ CREATE INDEX IF NOT EXISTS ix_stats ON daily_stats(customer_id, level, entity_id
 def connect():
     conn = sqlite3.connect(config.DB_PATH, check_same_thread=False, timeout=60)
     conn.row_factory = sqlite3.Row
+    conn.execute("PRAGMA journal_mode=WAL")
     conn.executescript(SCHEMA)
     return conn
 
