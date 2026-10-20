@@ -114,11 +114,6 @@ class Analyzer:
                 note += f" · 계정 전체({acct_pct:+.0f}%)보다 {lift:+.0f}%p 차이"
         return v, metric, note
 
-    @staticmethod
-    def who(actor):
-        """네이버가 자동으로 한 변경(SYSTEM)인지, 사람이 직접 한 변경인지"""
-        return "자동" if (actor or "").strip().upper() == "SYSTEM" else "직접"
-
     def run(self):
         since = (self.base - timedelta(days=config.REPORT_DAYS)).isoformat()
         accounts = {r["customer_id"]: dict(r) for r in self.conn.execute("SELECT * FROM accounts")}
@@ -129,7 +124,8 @@ class Analyzer:
             name_idx.setdefault((r["customer_id"], r["level"], r["name"]), r["entity_id"])
 
         evs = [dict(r) for r in self.conn.execute(
-            "SELECT * FROM change_events WHERE date>=? ORDER BY ts", (since,))]
+            "SELECT * FROM change_events WHERE date>=? ORDER BY ts", (since,))
+            if (r["actor"] or "").strip().upper() != "SYSTEM"]  # 네이버 자동 변경(SYSTEM)은 보지 않는다
         groups = defaultdict(list)
         for e in evs:
             cid = e["customer_id"]
@@ -203,11 +199,8 @@ class Analyzer:
                 "campaign": camp_name, "adgroup": grp_name if level == "adgroup" else "",
                 "categories": sorted({i["category"] for i in items}),
                 "actors": sorted({i["actor"] for i in items if i["actor"]}),
-                "system_only": all((i["actor"] or "").upper() == "SYSTEM" for i in items),
-                "who": sorted({self.who(i["actor"]) for i in items}),
                 "items": [{"ts": i["ts"][11:16], "category": i["category"], "type": i["change_type"],
-                           "actor": "" if i["actor"] == "API 감지" else i["actor"],
-                           "who": self.who(i["actor"]), "detail": i["detail"], "source": i["source"]} for i in items],
+                           "actor": "" if i["actor"] == "API 감지" else i["actor"], "detail": i["detail"], "source": i["source"]} for i in items],
                 "verdict": v, "metric": metric, "note": note,
                 "n_pre": n_pre, "n_post": n_post,
                 "pre": _round(pre), "post": _round(post),

@@ -153,11 +153,7 @@ details.help summary{cursor:pointer}
       <div class="tools">
         <div class="seg" id="catSeg"></div>
       </div>
-      <div class="tools">
-        <div class="seg" id="whoSeg"></div>
-        <span id="whoHint" style="font-size:12px;color:var(--sub)"></span>
-      </div>
-      <div style="font-size:12.5px;color:var(--sub);padding:8px 14px;border-bottom:1px solid var(--line)">줄을 누르면 바꾸기 전·후 7일을 비교해서 보여줍니다. 위 버튼으로 종류나 직접/자동을 고르면 그래프 점선도 같이 바뀝니다.</div>
+      <div style="font-size:12.5px;color:var(--sub);padding:8px 14px;border-bottom:1px solid var(--line)">줄을 누르면 바꾸기 전·후 7일을 비교해서 보여줍니다. 위 버튼으로 종류를 고르면 그래프 점선도 같이 바뀝니다.</div>
       <table class="list">
         <thead><tr><th style="width:110px">날짜</th><th>바꾼 것</th><th class="hide-m">대상</th><th style="width:150px">결과</th></tr></thead>
         <tbody id="rows"></tbody>
@@ -177,9 +173,8 @@ details.help summary{cursor:pointer}
 <script>
 const DATA = /*__DATA__*/null;
 const METRICS = {cost:{lb:"광고비", f:v=>won(v)}, clk:{lb:"클릭", f:v=>num(v)+"회"}, conv_amt:{lb:"전환매출", f:v=>won(v)}, roas:{lb:"ROAS", f:v=>num(v)+"%"}};
-const st = {acc:null, metric:"cost", range:30, who:"", open:null, q:"", cat:""};
+const st = {acc:null, metric:"cost", range:30, open:null, q:"", cat:""};
 const CATS = ["입찰가", "타겟팅", "제외키워드", "예산", "ON·OFF", "키워드", "소재", "구조"];
-const WHO = [["직접", "직접 변경"], ["자동", "자동(SYSTEM)"]];
 const $ = s => document.querySelector(s);
 const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
 const num = v => v == null ? "-" : Math.round(v).toLocaleString("ko-KR");
@@ -192,10 +187,8 @@ const WD = "일월화수목금토";
 const cut = (t, n) => t.length > n ? t.slice(0, n) + "…" : t;
 const dlabel = d => { const x = new Date(d + "T00:00:00"); return `${d.slice(5).replace("-", ".")} (${WD[x.getDay()]})`; };
 
-function actsOf(cid, ignoreCat, ignoreWho){
-  return DATA.actions.filter(a => a.customer_id === cid
-    && (ignoreWho || !st.who || (a.who || []).includes(st.who))
-    && (ignoreCat || !st.cat || a.categories.includes(st.cat)));
+function actsOf(cid, ignoreCat){
+  return DATA.actions.filter(a => a.customer_id === cid && (ignoreCat || !st.cat || a.categories.includes(st.cat)));
 }
 const PRI = c => { const i = CATS.indexOf(c); return c === st.cat ? -1 : i < 0 ? 99 : i; };
 const sortedItems = a => [...a.items].sort((x, y) => PRI(x.category) - PRI(y.category));
@@ -356,14 +349,6 @@ function renderCats(acc){
     CATS.map(c => `<button data-c="${c}" class="${st.cat === c ? "on" : ""}" ${n(c) ? "" : 'style="opacity:.45"'}>${c} ${n(c)}</button>`).join("");
   $("#catSeg").querySelectorAll("button").forEach(b => b.onclick = () => { st.cat = b.dataset.c; st.open = null; renderAll(); });
 }
-function renderWho(acc){
-  const all = actsOf(acc.customer_id, false, true);
-  const n = w => all.filter(a => (a.who || []).includes(w)).length;
-  $("#whoSeg").innerHTML = `<button data-w="" class="${!st.who ? "on" : ""}">전체</button>` +
-    WHO.map(([w, lb]) => `<button data-w="${w}" class="${st.who === w ? "on" : ""}" ${n(w) ? "" : 'style="opacity:.45"'}>${lb} ${n(w)}</button>`).join("");
-  $("#whoSeg").querySelectorAll("button").forEach(b => b.onclick = () => { st.who = b.dataset.w; st.open = null; renderAll(); });
-  $("#whoHint").textContent = "자동(SYSTEM) = 네이버가 자동으로 한 변경 (예: 확장소재 자동 등록)";
-}
 
 /* ---------- 전체 ---------- */
 function cur(){ return DATA.accounts.find(a => a.customer_id === st.acc); }
@@ -371,7 +356,7 @@ function renderAll(){
   const acc = cur(), acts = actsOf(acc.customer_id);
   $("#title").textContent = acc.name;
   $("#crumb").textContent = `${acc.login ? acc.login + " · " : ""}${DATA.base_date} 성과까지 반영 · ${DATA.generated_at} 갱신`;
-  renderSide(); renderSummary(acc, actsOf(acc.customer_id, true, true)); renderCats(acc); renderWho(acc); renderChart(acc, acts); renderRows(acts);
+  renderSide(); renderSummary(acc, actsOf(acc.customer_id, true)); renderCats(acc); renderChart(acc, acts); renderRows(acts);
 }
 function segs(){
   $("#metricSeg").innerHTML = Object.entries(METRICS).map(([k, m]) => `<button data-m="${k}" class="${k === st.metric ? "on" : ""}">${m.lb}</button>`).join("");
