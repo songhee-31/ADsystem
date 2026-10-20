@@ -36,7 +36,8 @@ BACKFILL_DAYS = int(os.environ.get("BACKFILL_DAYS", "35"))     # 처음 실행 �
 WINDOW_DAYS = int(os.environ.get("WINDOW_DAYS", "7"))          # 변경 전/후 비교 기간
 REPORT_DAYS = int(os.environ.get("REPORT_DAYS", "60"))         # 화면에 보여줄 변경 기간
 THRESHOLD_PCT = float(os.environ.get("THRESHOLD_PCT", "15"))   # 성장/하락 판정 기준(%)
-WORKERS = int(os.environ.get("WORKERS", "3"))                  # 동시에 처리할 광고주 수
+MIN_CLICKS = int(os.environ.get("MIN_CLICKS", "30"))           # 변경 전후 클릭 합이 이보다 적으면 판정 보류
+WORKERS =int(os.environ.get("WORKERS", "3"))                  # 동시에 처리할 광고주 수
 OWNER_NAME = os.environ.get("OWNER_NAME", "")
 
 for d in (DATA_DIR, INBOX_DIR, IMPORTED_DIR, SNAPSHOT_DIR, OUTPUT_DIR):

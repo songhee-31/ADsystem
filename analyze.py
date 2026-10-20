@@ -90,6 +90,9 @@ class Analyzer:
             if post and (post["clk"] > 0 or post["cost"] > 0):
                 return "신규", None, "변경 전 성과가 없어 변경 후 성과만 봅니다."
             return "데이터없음", None, "변경 전후 모두 성과가 없습니다."
+        total_clk = pre["clk"] * self.W + post["clk"] * n_post
+        if total_clk < config.MIN_CLICKS:
+            return "데이터없음", None, f"변경 전후 클릭이 {total_clk:.0f}회뿐이라 판정하지 않습니다 (기준 {config.MIN_CLICKS}회)."
         use_rev = (pre["conv_amt"] + post["conv_amt"]) > 0
         metric = "conv_amt" if use_rev else "clk"
         pct = _pct(pre[metric], post[metric])
