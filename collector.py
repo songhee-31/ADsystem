@@ -133,6 +133,9 @@ def take_snapshot(api: NaverAPI, log=print):
             snap["ads"][a["nccAdId"]] = {
                 "adgroup_id": gid, "type": a.get("type"), "lock": a.get("userLock"), "title": title,
                 "reg": a.get("regTm"), "edit": a.get("editTm"),
+                # 쇼핑 상품 소재는 소재마다 입찰가가 있다
+                "bid": (a.get("adAttr") or {}).get("bidAmt"),
+                "use_group_bid": (a.get("adAttr") or {}).get("useGroupBidAmt"),
             }
     return snap
 
@@ -280,6 +283,12 @@ def diff_snapshots(customer_id, prev, cur):
                 f"{a.get('title')} {_onoff(p['lock'])} → {_onoff(a['lock'])}")
         elif p.get("title") != a.get("title"):
             add(when(a), "소재", "소재 수정", g.get("campaign_id"), a["adgroup_id"], f"{p.get('title')} → {a.get('title')}")
+        if p and "bid" in p and (p.get("bid"), p.get("use_group_bid")) != (a.get("bid"), a.get("use_group_bid")) \
+                and (p.get("bid") is not None or a.get("bid") is not None):
+            before = "그룹입찰가" if p.get("use_group_bid") else _fmt_won(p.get("bid"))
+            after = "그룹입찰가" if a.get("use_group_bid") else _fmt_won(a.get("bid"))
+            if before != after:
+                add(when(a), "입찰가", "소재 입찰가 변경", g.get("campaign_id"), a["adgroup_id"], f"{a.get('title')} {before} → {after}")
     for aid, p in prev["ads"].items():
         if aid not in cur["ads"]:
             g = groups.get(p["adgroup_id"], {})
