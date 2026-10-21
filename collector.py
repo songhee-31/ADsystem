@@ -76,6 +76,9 @@ def take_snapshot(api: NaverAPI, log=print):
             "pc_weight": g.get("pcNetworkBidWeight"), "mo_weight": g.get("mobileNetworkBidWeight"),
             "cnts_bid": g.get("contentsNetworkBidAmt"), "use_cnts_bid": g.get("useCntsNetworkBidAmt"),
             "reg": g.get("regTm"), "edit": g.get("editTm"), "targets": {},
+            # 네이버 자동입찰(머신러닝 ML 또는 자동입찰 전략 사용 중)이면 입찰가를 시스템이 바꾼다
+            "auto_bid": g.get("systemBiddingType") not in (None, "", "NONE")
+                        or bool((g.get("autobidStrategy") or {}).get("isAutobidActive")),
         }
         neg = {}  # 제외키워드 {키워드: 등록시각(ISO, UTC)}
         if target_ok:
@@ -204,6 +207,8 @@ def diff_snapshots(customer_id, prev, cur):
         t = when(g)
         if p.get("lock") != g.get("lock"):
             add(t, "ON·OFF", "광고그룹 ON/OFF", cid, gid, f"광고그룹 {_onoff(p['lock'])} → {_onoff(g['lock'])}")
+        if "auto_bid" in p and p["auto_bid"] != g.get("auto_bid"):
+            add(t, "입찰가", "자동입찰 설정 변경", cid, gid, f"자동입찰 {'켬' if g.get('auto_bid') else '끔'}")
         if p.get("bid") != g.get("bid"):
             add(t, "입찰가", "기본 입찰가 변경", cid, gid, f"기본 입찰가 {_fmt_won(p['bid'])} → {_fmt_won(g['bid'])}")
         if (p.get("pc_weight"), p.get("mo_weight")) != (g.get("pc_weight"), g.get("mo_weight")):
@@ -281,6 +286,12 @@ def diff_snapshots(customer_id, prev, cur):
             add(datetime.combine(fallback_day, datetime.min.time(), KST), "소재", "소재 삭제",
                 g.get("campaign_id"), p["adgroup_id"], str(p.get("title")))
 
+    def system_bid(category, change_type, gid):
+        """자동입찰이 켜진 광고그룹의 입찰가 변경은 네이버 시스템이 한 것으로 본다."""
+        if category != "입찰가" or change_type == "자동입찰 설정 변경" or not gid:
+            return False
+        return bool(prev["adgroups"].get(gid, {}).get("auto_bid") or cur["adgroups"].get(gid, {}).get("auto_bid"))
+
     events = []
     for (day, category, change_type, cid, gid), b in buckets.items():
         lines = b["lines"]
@@ -291,7 +302,8 @@ def diff_snapshots(customer_id, prev, cur):
         events.append({
             "uid": db.event_uid("api", customer_id, day, change_type, cid, gid, detail),
             "customer_id": customer_id, "ts": b["ts"].strftime("%Y-%m-%d %H:%M"), "date": day,
-            "category": category, "change_type": change_type, "actor": "API 감지",
+            "category": category, "change_type": change_type,
+            "actor": "SYSTEM" if system_bid(category, change_type, gid) else "API 감지",
             "campaign_id": cid, "campaign_name": camps.get(cid, {}).get("name", ""),
             "adgroup_id": gid or "", "adgroup_name": groups.get(gid, {}).get("name", "") if gid else "",
             "keyword_ids": ",".join(b["kw_ids"]), "detail": detail, "source": "api",
