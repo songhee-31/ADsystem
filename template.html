@@ -99,6 +99,11 @@ table.list{width:100%;border-collapse:collapse}
 #catSeg{flex-wrap:wrap}
 .tools label{font-size:12.5px;color:var(--sub);display:flex;gap:5px;align-items:center}
 .empty{padding:28px;text-align:center;color:var(--mute)}
+.list.num td.r,.list.num th.r{text-align:right;white-space:nowrap;font-variant-numeric:tabular-nums}
+.list.num td.r .ba{font-size:12.5px;color:var(--sub)}
+.list.num td.r .pc{font-weight:700;font-size:13.5px}
+.list.num td.big{font-size:15px;font-weight:700}
+.list .tgt2{color:var(--sub);font-size:12px;margin-top:2px}
 details.help{margin-top:30px;color:var(--sub);font-size:12.5px}
 details.help summary{cursor:pointer}
 @media (max-width:860px){
@@ -128,36 +133,25 @@ details.help summary{cursor:pointer}
     <h1 id="title"></h1>
     <div class="crumb" id="crumb"></div>
 
-    <div class="card sum" id="sum"></div>
-
-    <h2>성과 흐름 <small>점선 = 바꾼 날 · 점선을 누르면 무엇을 바꿨고 어떻게 됐는지 보여줍니다</small></h2>
-    <div class="card">
-      <div class="bar">
-        <div class="seg" id="metricSeg"></div>
-        <div class="seg" id="rangeSeg"></div>
-      </div>
-      <div class="chartwrap" id="cw">
-        <svg id="chart" role="img" aria-label="일별 성과 추이와 변경일"></svg>
-        <div class="tip" id="tip"></div>
-        <div class="note" id="note"></div>
-      </div>
-      <div class="legend">
-        <span><i style="color:var(--good)"></i>바꾼 뒤 성장</span>
-        <span><i style="color:var(--bad)"></i>바꾼 뒤 하락</span>
-        <span><i style="color:var(--mute)"></i>변화 없음 · 아직 판단 전</span>
-      </div>
-    </div>
+    <h2>계정 성과 <small>최근 7일과 그 전 7일의 하루 평균 비교</small></h2>
+    <div class="card"><table class="list num" id="sum"></table></div>
 
     <h2>변경 내역 <small id="cnt"></small></h2>
     <div class="card">
       <div class="tools">
         <div class="seg" id="catSeg"></div>
       </div>
-      <div style="font-size:12.5px;color:var(--sub);padding:8px 14px;border-bottom:1px solid var(--line)">줄을 누르면 바꾸기 전·후 7일을 비교해서 보여줍니다. 위 버튼으로 종류를 고르면 그래프 점선도 같이 바뀝니다.</div>
-      <table class="list">
-        <thead><tr><th style="width:110px">날짜</th><th>바꾼 것</th><th class="hide-m">대상</th><th style="width:150px">결과</th></tr></thead>
+      <div class="tools">
+        <div class="seg" id="sortSeg"></div>
+        <div class="seg" id="rangeSeg"></div>
+      </div>
+      <div style="font-size:12.5px;color:var(--sub);padding:8px 14px;border-bottom:1px solid var(--line)">숫자는 바꾼 날을 뺀 <b>바꾸기 전 <span class="w"></span>일 → 바꾼 뒤 <span class="w"></span>일</b>의 하루 평균입니다. 줄을 누르면 바꾼 내용을 자세히 보여줍니다.</div>
+      <div style="overflow-x:auto">
+      <table class="list num">
+        <thead><tr><th style="width:96px">날짜</th><th>바꾼 것 · 대상</th><th class="r">광고비/일</th><th class="r hide-m">클릭/일</th><th class="r">전환매출/일</th><th class="r hide-m">ROAS</th><th style="width:118px">결과</th></tr></thead>
         <tbody id="rows"></tbody>
       </table>
+      </div>
     </div>
 
     <details class="help">
@@ -172,8 +166,8 @@ details.help summary{cursor:pointer}
 
 <script>
 const DATA = /*__DATA__*/null;
-const METRICS = {cost:{lb:"광고비", f:v=>won(v)}, clk:{lb:"클릭", f:v=>num(v)+"회"}, conv_amt:{lb:"전환매출", f:v=>won(v)}, roas:{lb:"ROAS", f:v=>num(v)+"%"}};
-const st = {acc:null, metric:"cost", range:30, open:null, q:"", cat:""};
+const st = {acc:null, range:30, q:"", cat:"", sort:"cost"};
+const SORTS = [["cost", "광고비 많은 순"], ["recent", "최신순"], ["change", "변화 큰 순"]];
 const CATS = ["입찰가", "타겟팅", "제외키워드", "예산", "ON·OFF", "키워드", "소재", "구조"];
 const $ = s => document.querySelector(s);
 const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
@@ -217,111 +211,63 @@ function renderSide(){
   }).join("") || '<li style="color:var(--mute)">검색 결과 없음</li>';
   $("#acc").querySelectorAll("li[data-id]").forEach(li => li.onclick = () => select(li.dataset.id));
 }
-function select(id){ st.acc = id; st.open = null; $("#pick").value = id; renderAll(); }
+function select(id){ st.acc = id; $("#pick").value = id; renderAll(); }
 
-/* ---------- 요약 ---------- */
+/* ---------- 계정 성과 비교표 ---------- */
+function cell(a, b, f, extra, weak){
+  const p = a ? (b - a) / a * 100 : (b ? 999 : null);
+  const cls = weak || p == null || Math.abs(p) < 1 ? "z" : p > 0 ? "up" : "dn";
+  return `<td class="r ${extra || ""}"><div class="ba">${f(a)} → ${f(b)}</div><div class="pc ${cls}">${p == null ? "-" : arrow(p) + pctTxt(p)}</div></td>`;
+}
 function renderSummary(acc, acts){
   const s = acc.series, last7 = s.slice(-7), prev7 = s.slice(-14, -7);
   const sum = (arr, i) => arr.reduce((t, p) => t + p[i], 0);
-  const c7 = sum(last7, 1) / 7, cp = sum(prev7, 1) / 7;
-  const r7 = sum(last7, 1) ? sum(last7, 3) / sum(last7, 1) * 100 : 0;
-  const rp = sum(prev7, 1) ? sum(prev7, 3) / sum(prev7, 1) * 100 : 0;
-  const ch = (a, b) => b ? (a - b) / b * 100 : null;
-  const pc = (p, unit="%") => p == null ? "" : `<em class="${Math.abs(p) < 1 ? "z" : p > 0 ? "up" : "dn"}">${arrow(p)}${Math.abs(p).toFixed(0)}${unit} 전주 대비</em>`;
+  const avg = (arr, i) => sum(arr, i) / 7;
+  const roas = arr => sum(arr, 1) ? sum(arr, 3) / sum(arr, 1) * 100 : 0;
+  const rows = [
+    ["광고비 (하루 평균)", avg(prev7, 1), avg(last7, 1), won],
+    ["클릭 (하루 평균)", avg(prev7, 2), avg(last7, 2), v => num(v) + "회"],
+    ["전환매출 (하루 평균)", avg(prev7, 3), avg(last7, 3), won],
+    ["ROAS", roas(prev7), roas(last7), v => num(v) + "%"],
+  ];
   const recent = acts.filter(a => a.date > s[s.length - 31][0]);
   const g = recent.filter(a => a.verdict === "성장").length, b = recent.filter(a => a.verdict === "하락").length;
-  $("#sum").innerHTML = `
-    <div><label>최근 7일 하루 평균 광고비</label><b>${won(c7)}</b>${pc(ch(c7, cp))}</div>
-    <div><label>최근 7일 ROAS</label><b>${num(r7)}%</b>${rp ? `<em class="${r7 >= rp ? "up" : "dn"}">${arrow(r7 - rp)}${Math.abs(r7 - rp).toFixed(0)}%p 전주 대비</em>` : ""}</div>
-    <div><label>최근 30일 변경</label><b>${recent.length}건</b></div>
-    <div><label>바꾼 뒤 결과</label><b><span class="up">성장 ${g}</span> · <span class="dn">하락 ${b}</span></b></div>`;
-}
-
-/* ---------- 차트 ---------- */
-function seriesFor(acc){
-  const pts = acc.series.slice(-st.range);
-  return pts.map(p => ({d:p[0], v: st.metric === "cost" ? p[1] : st.metric === "clk" ? p[2] : st.metric === "conv_amt" ? p[3] : (p[1] ? p[3] / p[1] * 100 : 0)}));
-}
-function renderChart(acc, acts){
-  const svg = $("#chart"), W = svg.clientWidth || 800, H = 300, pad = {l:56, r:16, t:16, b:28};
-  const pts = seriesFor(acc), n = pts.length;
-  const max = Math.max(1, ...pts.map(p => p.v)) * 1.12;
-  const x = i => pad.l + (W - pad.l - pad.r) * (n === 1 ? .5 : i / (n - 1));
-  const y = v => pad.t + (H - pad.t - pad.b) * (1 - v / max);
-  const idx = Object.fromEntries(pts.map((p, i) => [p.d, i]));
-  let s = "";
-  for (let k = 0; k <= 4; k++) { const v = max / 4 * k, yy = y(v);
-    s += `<line x1="${pad.l}" x2="${W - pad.r}" y1="${yy}" y2="${yy}" stroke="var(--line)"/>`;
-    s += `<text x="${pad.l - 8}" y="${yy + 4}" text-anchor="end">${short(v)}${st.metric === "roas" ? "%" : ""}</text>`; }
-  const step = Math.max(1, Math.ceil(n / 8));
-  pts.forEach((p, i) => { if (i % step === 0 || i === n - 1) s += `<text x="${x(i)}" y="${H - 8}" text-anchor="middle">${p.d.slice(5).replace("-", ".")}</text>`; });
-  // 변경일 점선 (같은 날 여러 건이면 하락 > 성장 > 기타 순으로 색)
-  const byDay = {};
-  acts.forEach(a => { if (idx[a.date] != null) (byDay[a.date] = byDay[a.date] || []).push(a); });
-  Object.entries(byDay).forEach(([d, arr]) => {
-    const v = arr.some(a => a.verdict === "하락") ? "하락" : arr.some(a => a.verdict === "성장") ? "성장" : "";
-    const xx = x(idx[d]), on = st.open === d;
-    s += `<line x1="${xx}" x2="${xx}" y1="${pad.t}" y2="${H - pad.b}" stroke="${tone(v)}" stroke-width="${on ? 2 : 1.5}" stroke-dasharray="4 4"/>`;
-    s += `<rect class="hit" data-d="${d}" x="${xx - 8}" y="${pad.t}" width="16" height="${H - pad.t - pad.b}" fill="transparent" style="cursor:pointer"/>`;
-    s += `<circle cx="${xx}" cy="${pad.t + 2}" r="${on ? 6 : 5}" fill="${tone(v)}" stroke="var(--card)" stroke-width="2" data-d="${d}" class="hit" style="cursor:pointer"/>`;
-  });
-  s += `<polyline fill="none" stroke="var(--brand)" stroke-width="2" stroke-linejoin="round" points="${pts.map((p, i) => `${x(i)},${y(p.v)}`).join(" ")}"/>`;
-  if (n <= 31) pts.forEach((p, i) => s += `<circle cx="${x(i)}" cy="${y(p.v)}" r="3" fill="var(--card)" stroke="var(--brand)" stroke-width="2"/>`);
-  s += `<line id="xh" y1="${pad.t}" y2="${H - pad.b}" stroke="var(--sub)" stroke-width="1" opacity="0"/>`;
-  svg.setAttribute("viewBox", `0 0 ${W} ${H}`);
-  svg.innerHTML = s;
-
-  const tip = $("#tip"), xh = $("#xh");
-  svg.onmousemove = e => {
-    const r = svg.getBoundingClientRect(), mx = (e.clientX - r.left) * W / r.width;
-    const i = Math.max(0, Math.min(n - 1, Math.round((mx - pad.l) / ((W - pad.l - pad.r) / Math.max(1, n - 1)))));
-    const p = pts[i]; xh.setAttribute("x1", x(i)); xh.setAttribute("x2", x(i)); xh.setAttribute("opacity", .4);
-    const chg = byDay[p.d] ? `<br><span style="color:var(--sub)">변경 ${byDay[p.d].length}건 · 눌러서 보기</span>` : "";
-    tip.innerHTML = `<b>${dlabel(p.d)}</b><br>${METRICS[st.metric].lb} ${METRICS[st.metric].f(p.v)}${chg}`;
-    tip.style.display = "block";
-    const left = x(i) / W * r.width + 16; tip.style.left = Math.min(left, r.width - 150) + "px"; tip.style.top = "18px";
-  };
-  svg.onmouseleave = () => { tip.style.display = "none"; xh.setAttribute("opacity", 0); };
-  svg.onclick = e => { const d = e.target.dataset && e.target.dataset.d; if (d) openNote(d); };
-  if (st.open && byDay[st.open]) showNote(st.open, byDay[st.open], x(idx[st.open]) / W);
-  else $("#note").style.display = "none";
-}
-function openNote(d){ st.open = st.open === d ? null : d; renderChart(cur(), actsOf(st.acc)); highlightRows(); }
-function showNote(d, arr, fx){
-  const note = $("#note"), cw = $("#cw").clientWidth;
-  const cnt = {};
-  arr.forEach(a => a.items.forEach(i => { const m = /(\d+)건/.exec(i.detail || ""); cnt[i.type] = (cnt[i.type] || 0) + (m && i.source === "api" ? +m[1] : 1); }));
-  const ents = Object.entries(cnt);
-  const items = ents.slice(0, 4).map(([t, c]) => c > 1 ? `${t} ${c}건` : (arr.flatMap(a => a.items).find(i => i.type === t).detail || t));
-  const more = ents.length - items.length;
-  const res = arr.map(a => `${esc(a.adgroup || a.campaign || "계정")}: ${resultHTML(a)}`).slice(0, 3).join("<br>");
-  note.innerHTML = `<div class="nh">${dlabel(d)}<button aria-label="닫기">×</button></div>
-    <ul>${items.map(t => `<li>${esc(t.length > 40 ? t.slice(0, 40) + "…" : t)}</li>`).join("")}${more > 0 ? `<li style="list-style:none;margin-left:-14px;color:var(--mute)">외 ${more}종류</li>` : ""}</ul>
-    <div class="res">${res}</div>`;
-  note.style.display = "block";
-  const px = fx * cw;
-  note.style.left = (px + 270 > cw ? Math.max(8, px - 262) : px + 12) + "px";
-  note.style.top = "40px";
-  note.querySelector("button").onclick = () => openNote(d);
+  $("#sum").innerHTML = `<thead><tr><th>지표</th><th class="r">직전 7일</th><th class="r">최근 7일</th><th class="r">변화</th></tr></thead><tbody>` +
+    rows.map(([lb, a, c, f]) => {
+      const p = a ? (c - a) / a * 100 : null;
+      const cls = p == null || Math.abs(p) < 1 ? "z" : p > 0 ? "up" : "dn";
+      return `<tr><td>${lb}</td><td class="r">${f(a)}</td><td class="r big">${f(c)}</td><td class="r ${cls}" style="font-weight:700">${p == null ? "-" : arrow(p) + pctTxt(p)}</td></tr>`;
+    }).join("") +
+    `<tr><td>최근 30일 변경</td><td class="r" colspan="3">${recent.length}건 · <span class="up">바꾼 뒤 성장 ${g}</span> · <span class="dn">하락 ${b}</span></td></tr></tbody>`;
 }
 
 /* ---------- 변경 표 ---------- */
+function spendOf(a){ return Math.max(a.pre ? a.pre.cost : 0, a.post ? a.post.cost : 0); }
+function changeOf(a){ const p = a.metric ? a.pct[a.metric] : null; return p == null ? -1 : Math.abs(Math.min(p, 999)); }
 function renderRows(acts){
   const since = cur().series[Math.max(0, cur().series.length - st.range)][0];
   const list = acts.filter(a => a.date >= since);
-  $("#cnt").textContent = `${list.length}건 · 최신순`;
-  if (!list.length) { $("#rows").innerHTML = `<tr><td colspan="4" class="empty">이 기간에 바꾼 내역이 없습니다.</td></tr>`; return; }
-  $("#rows").innerHTML = list.map((a, k) => `
-    <tr class="row" data-k="${k}" data-d="${a.date}">
+  if (st.sort === "cost") list.sort((x, y) => spendOf(y) - spendOf(x) || (y.ts > x.ts ? 1 : -1));
+  else if (st.sort === "change") list.sort((x, y) => changeOf(y) - changeOf(x) || spendOf(y) - spendOf(x));
+  else list.sort((x, y) => (y.ts > x.ts ? 1 : -1));
+  $("#cnt").textContent = `${list.length}건 · ${SORTS.find(x => x[0] === st.sort)[1]}`;
+  if (!list.length) { $("#rows").innerHTML = `<tr><td colspan="7" class="empty">이 기간에 바꾼 내역이 없습니다.</td></tr>`; return; }
+  const na = m => `<td class="r ${m || ""}"><div class="ba">-</div></td>`;
+  $("#rows").innerHTML = list.map((a, k) => {
+    const has = a.pre && a.post, weak = a.n_post < 3;
+    return `<tr class="row" data-k="${k}">
       <td class="dt">${dlabel(a.date)}</td>
-      <td><div class="what">${esc(whatTxt(a))}</div><div class="tgt">${esc(sumTxt(a))}</div></td>
-      <td class="hide-m tgt">${esc(a.campaign)}${a.adgroup ? "<br>› " + esc(a.adgroup) : ""}</td>
-      <td>${resultHTML(a)}</td>
-    </tr>`).join("");
+      <td><div class="what">${esc(whatTxt(a))}</div><div class="tgt">${esc(sumTxt(a))}</div>
+        <div class="tgt2">${esc(a.campaign)}${a.adgroup ? " › " + esc(a.adgroup) : ""}</div></td>
+      ${has ? cell(a.pre.cost, a.post.cost, short, "", weak) : na()}
+      ${has ? cell(a.pre.clk, a.post.clk, num, "hide-m", weak) : na("hide-m")}
+      ${has ? cell(a.pre.conv_amt, a.post.conv_amt, short, "", weak) : na()}
+      ${has ? cell(a.pre.roas, a.post.roas, v => num(v) + "%", "hide-m", weak) : na("hide-m")}
+      <td>${resultHTML(a)}${weak && has ? `<div class="tgt2">바꾼 뒤 ${a.n_post}일치만 반영</div>` : ""}</td>
+    </tr>`;
+  }).join("");
   $("#rows").querySelectorAll("tr.row").forEach(tr => tr.onclick = () => toggleDetail(tr, list[+tr.dataset.k]));
-  highlightRows();
 }
-function highlightRows(){ document.querySelectorAll("tr.row").forEach(tr => tr.classList.toggle("on", tr.dataset.d === st.open)); }
 function toggleDetail(tr, a){
   const nx = tr.nextElementSibling;
   if (nx && nx.classList.contains("detail")) { nx.remove(); return; }
@@ -337,7 +283,7 @@ function toggleDetail(tr, a){
   const items = a.items.length > 1 ? `<ul class="dmore">${a.items.slice(0, 12).map(i => `<li>${esc(i.ts)} ${esc(cut(i.detail || i.type, 140))} ${i.actor ? `<span style="color:var(--mute)">· ${esc(i.actor)}</span>` : ""}</li>`).join("")}${a.items.length > 12 ? `<li>외 ${a.items.length - 12}건</li>` : ""}</ul>` : "";
   const row = document.createElement("tr");
   row.className = "detail";
-  row.innerHTML = `<td colspan="4">${cmp}${kw}${items}</td>`;
+  row.innerHTML = `<td colspan="7">${cmp}${kw}${items}</td>`;
   tr.after(row);
 }
 
@@ -347,7 +293,7 @@ function renderCats(acc){
   const n = c => all.filter(a => a.categories.includes(c)).length;
   $("#catSeg").innerHTML = `<button data-c="" class="${!st.cat ? "on" : ""}">전체 ${all.length}</button>` +
     CATS.map(c => `<button data-c="${c}" class="${st.cat === c ? "on" : ""}" ${n(c) ? "" : 'style="opacity:.45"'}>${c} ${n(c)}</button>`).join("");
-  $("#catSeg").querySelectorAll("button").forEach(b => b.onclick = () => { st.cat = b.dataset.c; st.open = null; renderAll(); });
+  $("#catSeg").querySelectorAll("button").forEach(b => b.onclick = () => { st.cat = b.dataset.c; renderAll(); });
 }
 
 /* ---------- 전체 ---------- */
@@ -356,12 +302,12 @@ function renderAll(){
   const acc = cur(), acts = actsOf(acc.customer_id);
   $("#title").textContent = acc.name;
   $("#crumb").textContent = `${acc.login ? acc.login + " · " : ""}${DATA.base_date} 성과까지 반영 · ${DATA.generated_at} 갱신`;
-  renderSide(); renderSummary(acc, actsOf(acc.customer_id, true)); renderCats(acc); renderChart(acc, acts); renderRows(acts);
+  renderSide(); renderSummary(acc, actsOf(acc.customer_id, true)); renderCats(acc); renderRows(acts);
 }
 function segs(){
-  $("#metricSeg").innerHTML = Object.entries(METRICS).map(([k, m]) => `<button data-m="${k}" class="${k === st.metric ? "on" : ""}">${m.lb}</button>`).join("");
-  $("#rangeSeg").innerHTML = [14, 30, 60].map(r => `<button data-r="${r}" class="${r === st.range ? "on" : ""}">${r}일</button>`).join("");
-  $("#metricSeg").querySelectorAll("button").forEach(b => b.onclick = () => { st.metric = b.dataset.m; segs(); renderChart(cur(), actsOf(st.acc)); });
+  $("#sortSeg").innerHTML = SORTS.map(([k, lb]) => `<button data-s="${k}" class="${k === st.sort ? "on" : ""}">${lb}</button>`).join("");
+  $("#rangeSeg").innerHTML = [14, 30, 60].map(r => `<button data-r="${r}" class="${r === st.range ? "on" : ""}">최근 ${r}일</button>`).join("");
+  $("#sortSeg").querySelectorAll("button").forEach(b => b.onclick = () => { st.sort = b.dataset.s; segs(); renderRows(actsOf(st.acc)); });
   $("#rangeSeg").querySelectorAll("button").forEach(b => b.onclick = () => { st.range = +b.dataset.r; segs(); renderAll(); });
 }
 function init(){
@@ -375,7 +321,6 @@ function init(){
   let hash = ""; try { hash = decodeURIComponent(location.hash.slice(1)); } catch (e) {}
   st.acc = DATA.accounts.some(a => a.customer_id === hash) ? hash : DATA.accounts[0].customer_id;
   segs(); renderAll();
-  let t; window.addEventListener("resize", () => { clearTimeout(t); t = setTimeout(() => renderChart(cur(), actsOf(st.acc)), 150); });
 }
 init();
 </script>

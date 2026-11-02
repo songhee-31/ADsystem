@@ -252,8 +252,8 @@ CUSTOMER_ID (숫자): <span class="in">1234567</span>
     <div>
       <ol style="list-style:none;padding-left:0">
         <li><span class="mark">1</span><b>왼쪽 광고주 목록</b>: 최근 7일 광고비 순. <span class="pill r">▼</span> 바꾼 뒤 하락한 건, <span class="pill g">▲</span> 성장한 건이 있다는 뜻</li>
-        <li><span class="mark">2</span><b>성과 그래프</b>: 광고비·클릭·전환매출·ROAS 중 하나씩. <b>세로 점선 = 바꾼 날</b>. 점선을 누르면 무엇을 바꿨고 결과가 어땠는지 나옵니다</li>
-        <li><span class="mark">3</span><b>변경 내역</b>: 위 버튼으로 입찰가·타겟팅·제외키워드 등 종류를 고르고, 줄을 누르면 바꾸기 전·후 7일 비교가 나옵니다</li>
+        <li><span class="mark">2</span><b>계정 성과</b>: 광고비·클릭·전환매출·ROAS를 직전 7일과 최근 7일 숫자로 비교합니다</li>
+        <li><span class="mark">3</span><b>변경 내역</b>: 기본은 <b>광고비 많은 순</b>이라 돈이 많이 걸린 변경부터 봅니다(최신순·변화 큰 순으로 바꿀 수 있음). 각 줄에 바꾸기 전 → 바꾼 뒤 하루 평균 광고비·클릭·전환매출·ROAS와 증감률이 나오고, 줄을 누르면 바꾼 내용이 자세히 나옵니다. 바꾼 지 3일이 안 된 건은 숫자가 회색입니다</li>
       </ol>
       <div class="tbl"><table>
         <tr><th>표시</th><th>뜻</th></tr>
@@ -272,17 +272,12 @@ CUSTOMER_ID (숫자): <span class="in">1234567</span>
           <div class="on">예시광고주A</div><div>예시광고주B</div><div>예시광고주C</div><div>예시광고주D</div>
         </div>
         <div class="main">
-          <div><span class="mark">2</span><b>성과 흐름</b></div>
-          <svg viewBox="0 0 300 92" preserveAspectRatio="none" aria-hidden="true">
-            <line x1="0" y1="88" x2="300" y2="88" stroke="var(--line)"/>
-            <line x1="150" y1="4" x2="150" y2="88" stroke="var(--green)" stroke-width="1.5" stroke-dasharray="4 4"/>
-            <line x1="235" y1="4" x2="235" y2="88" stroke="var(--bad)" stroke-width="1.5" stroke-dasharray="4 4"/>
-            <polyline fill="none" stroke="var(--navy)" stroke-width="2" points="0,60 25,64 50,58 75,66 100,61 125,63 150,57 175,40 200,34 225,30 250,48 275,52 300,50"/>
-            <circle cx="150" cy="6" r="4" fill="var(--green)"/><circle cx="235" cy="6" r="4" fill="var(--bad)"/>
-          </svg>
-          <div style="margin-top:6px"><span class="mark">3</span><b>변경 내역</b></div>
-          <div class="row"><span>10.14 입찰가 300→420원</span><span class="pill g">▲ 성장 +23%</span></div>
-          <div class="row"><span>10.17 요일/시간 타겟팅</span><span class="pill r">▼ 하락 −18%</span></div>
+          <div><span class="mark">2</span><b>계정 성과</b></div>
+          <div class="row"><span>광고비/일</span><span>7.4만 → <b>8.3만</b> <span style="color:var(--green)">▲13%</span></span></div>
+          <div class="row"><span>ROAS</span><span>803% → <b>513%</b> <span style="color:var(--bad)">▼36%</span></span></div>
+          <div style="margin-top:6px"><span class="mark">3</span><b>변경 내역</b> <span style="color:var(--sub)">· 광고비 많은 순</span></div>
+          <div class="row"><span>입찰가 280→480원<br><span style="color:var(--sub)">광고비 5,504 → 2만</span></span><span class="pill g">▲ 성장 +50%</span></div>
+          <div class="row"><span>요일/시간 타겟팅<br><span style="color:var(--sub)">광고비 2,317 → 2만</span></span><span class="pill g">▲ 성장 +87%</span></div>
         </div>
       </div>
     </div>
