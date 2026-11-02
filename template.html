@@ -133,7 +133,8 @@ details.help summary{cursor:pointer}
     <h1 id="title"></h1>
     <div class="crumb" id="crumb"></div>
 
-    <h2>계정 성과 <small>최근 7일과 그 전 7일의 하루 평균 비교</small></h2>
+    <div class="seg" id="rangeSeg"></div>
+    <h2>계정 성과 <small id="sumNote"></small></h2>
     <div class="card"><table class="list num" id="sum"></table></div>
 
     <h2>변경 내역 <small id="cnt"></small></h2>
@@ -143,7 +144,6 @@ details.help summary{cursor:pointer}
       </div>
       <div class="tools">
         <div class="seg" id="sortSeg"></div>
-        <div class="seg" id="rangeSeg"></div>
       </div>
       <div style="font-size:12.5px;color:var(--sub);padding:8px 14px;border-bottom:1px solid var(--line)">숫자는 바꾼 날을 뺀 <b>바꾸기 전 <span class="w"></span>일 → 바꾼 뒤 <span class="w"></span>일</b>의 하루 평균입니다. 줄을 누르면 바꾼 내용을 자세히 보여줍니다.</div>
       <div style="overflow-x:auto">
@@ -166,7 +166,7 @@ details.help summary{cursor:pointer}
 
 <script>
 const DATA = /*__DATA__*/null;
-const st = {acc:null, range:30, q:"", cat:"", sort:"cost"};
+const st = {acc:null, range:7, q:"", cat:"", sort:"cost"};
 const SORTS = [["cost", "광고비 많은 순"], ["recent", "최신순"], ["change", "변화 큰 순"]];
 const CATS = ["입찰가", "타겟팅", "제외키워드", "예산", "ON·OFF", "키워드", "소재", "구조"];
 const $ = s => document.querySelector(s);
@@ -220,9 +220,9 @@ function cell(a, b, f, extra, weak){
   return `<td class="r ${extra || ""}"><div class="ba">${f(a)} → ${f(b)}</div><div class="pc ${cls}">${p == null ? "-" : arrow(p) + pctTxt(p)}</div></td>`;
 }
 function renderSummary(acc, acts){
-  const s = acc.series, last7 = s.slice(-7), prev7 = s.slice(-14, -7);
+  const N = st.range, s = acc.series, last7 = s.slice(-N), prev7 = s.slice(-2 * N, -N);
   const sum = (arr, i) => arr.reduce((t, p) => t + p[i], 0);
-  const avg = (arr, i) => sum(arr, i) / 7;
+  const avg = (arr, i) => sum(arr, i) / N;
   const roas = arr => sum(arr, 1) ? sum(arr, 3) / sum(arr, 1) * 100 : 0;
   const rows = [
     ["광고비 (하루 평균)", avg(prev7, 1), avg(last7, 1), won],
@@ -230,15 +230,16 @@ function renderSummary(acc, acts){
     ["전환매출 (하루 평균)", avg(prev7, 3), avg(last7, 3), won],
     ["ROAS", roas(prev7), roas(last7), v => num(v) + "%"],
   ];
-  const recent = acts.filter(a => a.date > s[s.length - 31][0]);
+  const recent = acts.filter(a => a.date > s[s.length - N - 1][0]);
+  $("#sumNote").textContent = `최근 ${N}일과 그 전 ${N}일의 하루 평균 비교`;
   const g = recent.filter(a => a.verdict === "성장").length, b = recent.filter(a => a.verdict === "하락").length;
-  $("#sum").innerHTML = `<thead><tr><th>지표</th><th class="r">직전 7일</th><th class="r">최근 7일</th><th class="r">변화</th></tr></thead><tbody>` +
+  $("#sum").innerHTML = `<thead><tr><th>지표</th><th class="r">직전 ${N}일</th><th class="r">최근 ${N}일</th><th class="r">변화</th></tr></thead><tbody>` +
     rows.map(([lb, a, c, f]) => {
       const p = a ? (c - a) / a * 100 : null;
       const cls = p == null || Math.abs(p) < 1 ? "z" : p > 0 ? "up" : "dn";
       return `<tr><td>${lb}</td><td class="r">${f(a)}</td><td class="r big">${f(c)}</td><td class="r ${cls}" style="font-weight:700">${p == null ? "-" : arrow(p) + pctTxt(p)}</td></tr>`;
     }).join("") +
-    `<tr><td>최근 30일 변경</td><td class="r" colspan="3">${recent.length}건 · <span class="up">바꾼 뒤 성장 ${g}</span> · <span class="dn">하락 ${b}</span></td></tr></tbody>`;
+    `<tr><td>최근 ${N}일 변경</td><td class="r" colspan="3">${recent.length}건 · <span class="up">바꾼 뒤 성장 ${g}</span> · <span class="dn">하락 ${b}</span></td></tr></tbody>`;
 }
 
 /* ---------- 변경 표 ---------- */
@@ -306,7 +307,7 @@ function renderAll(){
 }
 function segs(){
   $("#sortSeg").innerHTML = SORTS.map(([k, lb]) => `<button data-s="${k}" class="${k === st.sort ? "on" : ""}">${lb}</button>`).join("");
-  $("#rangeSeg").innerHTML = [14, 30, 60].map(r => `<button data-r="${r}" class="${r === st.range ? "on" : ""}">최근 ${r}일</button>`).join("");
+  $("#rangeSeg").innerHTML = [7, 14, 30].map(r => `<button data-r="${r}" class="${r === st.range ? "on" : ""}">최근 ${r}일</button>`).join("");
   $("#sortSeg").querySelectorAll("button").forEach(b => b.onclick = () => { st.sort = b.dataset.s; segs(); renderRows(actsOf(st.acc)); });
   $("#rangeSeg").querySelectorAll("button").forEach(b => b.onclick = () => { st.range = +b.dataset.r; segs(); renderAll(); });
 }
