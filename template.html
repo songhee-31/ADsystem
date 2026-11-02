@@ -150,12 +150,13 @@ details.help summary{cursor:pointer}
         <div class="seg" id="catSeg"></div>
       </div>
       <div class="tools">
+        <div class="seg" id="viewSeg"></div>
         <div class="seg" id="sortSeg"></div>
       </div>
-      <div style="font-size:12.5px;color:var(--sub);padding:8px 14px;border-bottom:1px solid var(--line)">숫자는 바꾼 날을 뺀 <b>바꾸기 전 <span class="w"></span>일 → 바꾼 뒤 <span class="w"></span>일</b>의 하루 평균입니다. 줄을 누르면 바꾼 내용을 자세히 보여줍니다.</div>
+      <div id="listNote" style="font-size:12.5px;color:var(--sub);padding:8px 14px;border-bottom:1px solid var(--line)"></div>
       <div style="overflow-x:auto">
       <table class="list num">
-        <thead><tr><th style="width:96px">날짜</th><th>바꾼 것 · 대상</th><th class="r">광고비/일</th><th class="r hide-m">클릭/일</th><th class="r">전환매출/일</th><th class="r hide-m">ROAS</th><th style="width:118px">결과</th></tr></thead>
+        <thead id="thead"></thead>
         <tbody id="rows"></tbody>
       </table>
       </div>
@@ -173,8 +174,9 @@ details.help summary{cursor:pointer}
 
 <script>
 const DATA = /*__DATA__*/null;
-const st = {acc:null, range:7, from:"", to:"", q:"", cat:"", sort:"cost"};
-const SORTS = [["cost", "광고비 많은 순"], ["recent", "최신순"], ["change", "변화 큰 순"]];
+const st = {acc:null, range:7, from:"", to:"", q:"", cat:"", sort:"cost", view:"change"};
+const SORTS = [["cost", "광고비 많이 쓴 순"], ["recent", "최신순"], ["change", "변화 큰 순"]];
+const VIEWS = [["change", "변경별"], ["adgroup", "광고그룹별"], ["campaign", "캠페인별"]];
 const CATS = ["입찰가", "타겟팅", "제외키워드", "예산", "ON·OFF", "키워드", "소재", "구조"];
 const $ = s => document.querySelector(s);
 const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
@@ -269,15 +271,41 @@ function renderSummary(acc, acts){
 }
 
 /* ---------- 변경 표 ---------- */
-function spendOf(a){ return Math.max(a.pre ? a.pre.cost : 0, a.post ? a.post.cost : 0); }
+/* 광고그룹·캠페인의 기간 성과 (analyze 가 만든 groups 의 일별 값에서 합산) */
+function groupStats(acc, key, from, to){
+  const g = acc.groups && acc.groups[key];
+  if (!g) return null;
+  const t = {cost: 0, clk: 0, conv_amt: 0, days: 0};
+  for (const [i, c, k, v] of g.s) {
+    const d = acc.series[i][0];
+    if (d >= from && d <= to) { t.cost += c; t.clk += k; t.conv_amt += v; }
+  }
+  t.days = dayDiff(from, to) + 1;
+  return t;
+}
+const targetKey = a => a.adgroup_id ? "a:" + a.adgroup_id : a.campaign_id ? "c:" + a.campaign_id : "";
+/* 정렬용 광고비: 지금 고른 기간에 그 대상이 실제로 쓴 광고비 합계 */
+function spendOf(a){
+  const P = period(), t = groupStats(cur(), targetKey(a), P.from, P.to);
+  if (t) return t.cost;
+  return (a.pre ? a.pre.cost * a.n_pre : 0) + (a.post ? a.post.cost * a.n_post : 0);
+}
 function changeOf(a){ const p = a.metric ? a.pct[a.metric] : null; return p == null ? -1 : Math.abs(Math.min(p, 999)); }
+function sortList(list, spend, recent, change){
+  if (st.sort === "cost") list.sort((x, y) => spend(y) - spend(x) || (recent(y) > recent(x) ? 1 : -1));
+  else if (st.sort === "change") list.sort((x, y) => change(y) - change(x) || spend(y) - spend(x));
+  else list.sort((x, y) => (recent(y) > recent(x) ? 1 : -1));
+}
 function renderRows(acts){
   const P = period();
   const list = acts.filter(a => a.date >= P.from && a.date <= P.to);
-  if (st.sort === "cost") list.sort((x, y) => spendOf(y) - spendOf(x) || (y.ts > x.ts ? 1 : -1));
-  else if (st.sort === "change") list.sort((x, y) => changeOf(y) - changeOf(x) || spendOf(y) - spendOf(x));
-  else list.sort((x, y) => (y.ts > x.ts ? 1 : -1));
+  if (st.view === "change") renderChanges(list, P); else renderGroups(list, P);
+}
+function renderChanges(list, P){
+  sortList(list, spendOf, a => a.ts, changeOf);
   $("#cnt").textContent = `${list.length}건 · ${SORTS.find(x => x[0] === st.sort)[1]}`;
+  $("#listNote").innerHTML = `광고비·클릭·전환매출·ROAS는 바꾼 날을 뺀 <b>바꾸기 전 ${DATA.window}일 → 바꾼 뒤 ${DATA.window}일</b>의 하루 평균입니다. "기간 광고비"는 고른 기간에 그 광고그룹(캠페인)이 쓴 광고비 합계입니다. 줄을 누르면 자세히 보여줍니다.`;
+  $("#thead").innerHTML = `<tr><th style="width:96px">날짜</th><th>바꾼 것 · 대상</th><th class="r">광고비/일</th><th class="r hide-m">클릭/일</th><th class="r">전환매출/일</th><th class="r hide-m">ROAS</th><th style="width:118px">결과</th></tr>`;
   if (!list.length) { $("#rows").innerHTML = `<tr><td colspan="7" class="empty">이 기간에 바꾼 내역이 없습니다.</td></tr>`; return; }
   const na = m => `<td class="r ${m || ""}"><div class="ba">-</div></td>`;
   $("#rows").innerHTML = list.map((a, k) => {
@@ -285,7 +313,7 @@ function renderRows(acts){
     return `<tr class="row" data-k="${k}">
       <td class="dt">${dlabel(a.date)}</td>
       <td><div class="what">${esc(whatTxt(a))}</div><div class="tgt">${esc(sumTxt(a))}</div>
-        <div class="tgt2">${esc(a.campaign)}${a.adgroup ? " › " + esc(a.adgroup) : ""}</div></td>
+        <div class="tgt2">${esc(a.campaign)}${a.adgroup ? " › " + esc(a.adgroup) : ""} · 기간 광고비 <b>${won(spendOf(a))}</b></div></td>
       ${has ? cell(a.pre.cost, a.post.cost, short, "", weak) : na()}
       ${has ? cell(a.pre.clk, a.post.clk, num, "hide-m", weak) : na("hide-m")}
       ${has ? cell(a.pre.conv_amt, a.post.conv_amt, short, "", weak) : na()}
@@ -294,6 +322,63 @@ function renderRows(acts){
     </tr>`;
   }).join("");
   $("#rows").querySelectorAll("tr.row").forEach(tr => tr.onclick = () => toggleDetail(tr, list[+tr.dataset.k]));
+}
+/* 광고그룹별 / 캠페인별: 고른 기간의 성과를 바로 앞 같은 길이 기간과 비교하고, 그 안의 변경을 묶어서 보여줌 */
+function renderGroups(list, P){
+  const acc = cur(), lvl = st.view, camp = {};
+  for (const g of Object.values(acc.groups || {})) if (g.level === "campaign") camp[g.id] = g.name;
+  const by = {};
+  for (const a of list) {
+    const id = lvl === "adgroup" ? a.adgroup_id : a.campaign_id;
+    if (!id) continue;
+    const k = (lvl === "adgroup" ? "a:" : "c:") + id;
+    (by[k] = by[k] || {key: k, acts: []}).acts.push(a);
+  }
+  const rows = Object.values(by).map(r => {
+    const g = acc.groups[r.key] || {};
+    r.name = g.name || (lvl === "adgroup" ? r.acts[0].adgroup : r.acts[0].campaign);
+    r.campaign = lvl === "adgroup" ? (camp[g.campaign_id] || r.acts[0].campaign) : "";
+    r.cur = groupStats(acc, r.key, P.from, P.to) || {cost: 0, clk: 0, conv_amt: 0, days: P.n};
+    r.prev = groupStats(acc, r.key, P.pFrom, P.pTo) || {cost: 0, clk: 0, conv_amt: 0, days: P.n};
+    r.last = r.acts.reduce((m, a) => a.ts > m ? a.ts : m, "");
+    r.g = r.acts.filter(a => a.verdict === "성장").length;
+    r.b = r.acts.filter(a => a.verdict === "하락").length;
+    const useRev = r.cur.conv_amt + r.prev.conv_amt > 0, m = useRev ? "conv_amt" : "clk";
+    r.chg = r.prev[m] ? Math.abs((r.cur[m] - r.prev[m]) / r.prev[m] * 100) : (r.cur[m] ? 999 : -1);
+    return r;
+  });
+  sortList(rows, r => r.cur.cost, r => r.last, r => r.chg);
+  const unit = lvl === "adgroup" ? "광고그룹" : "캠페인";
+  $("#cnt").textContent = `${unit} ${rows.length}개 · 변경 ${list.length}건 · ${SORTS.find(x => x[0] === st.sort)[1]}`;
+  $("#listNote").innerHTML = `고른 기간(${P.label})에 바꾼 내역이 있는 ${unit}만 보여줍니다. 숫자는 <b>${P.pLabel} → ${P.label}</b>의 하루 평균이고, "기간 광고비"는 ${P.label} 동안 쓴 합계입니다. 줄을 누르면 그 ${unit}에서 바꾼 내역이 나옵니다.`;
+  $("#thead").innerHTML = `<tr><th>${unit}</th><th class="r">기간 광고비</th><th class="r hide-m">광고비/일</th><th class="r">전환매출/일</th><th class="r hide-m">ROAS</th><th style="width:130px">변경</th></tr>`;
+  if (!rows.length) { $("#rows").innerHTML = `<tr><td colspan="6" class="empty">이 기간에 바꾼 내역이 없습니다.</td></tr>`; return; }
+  const avg = (t, k) => t.days ? t[k] / t.days : 0;
+  const roas = t => t.cost ? t.conv_amt / t.cost * 100 : 0;
+  $("#rows").innerHTML = rows.map((r, k) => `
+    <tr class="row" data-k="${k}">
+      <td><div class="what">${esc(r.name)}</div>${r.campaign ? `<div class="tgt2">${esc(r.campaign)}</div>` : ""}</td>
+      <td class="r big">${won(r.cur.cost)}</td>
+      ${cell(avg(r.prev, "cost"), avg(r.cur, "cost"), short, "hide-m")}
+      ${cell(avg(r.prev, "conv_amt"), avg(r.cur, "conv_amt"), short)}
+      ${cell(roas(r.prev), roas(r.cur), v => num(v) + "%", "hide-m")}
+      <td><b>${r.acts.length}건</b><div class="tgt2"><span class="up">▲${r.g}</span> · <span class="dn">▼${r.b}</span> · 최근 ${dlabel(r.last.slice(0, 10))}</div></td>
+    </tr>`).join("");
+  $("#rows").querySelectorAll("tr.row").forEach(tr => tr.onclick = () => toggleGroup(tr, rows[+tr.dataset.k]));
+}
+function toggleGroup(tr, r){
+  const nx = tr.nextElementSibling;
+  if (nx && nx.classList.contains("detail")) { nx.remove(); return; }
+  const acts = [...r.acts].sort((x, y) => (y.ts > x.ts ? 1 : -1));
+  const line = a => {
+    const has = a.pre && a.post, p = has ? a.pct.cost : null;
+    return `<li><b>${dlabel(a.date)}</b> ${esc(whatTxt(a))} — ${esc(sumTxt(a))}${st.view === "campaign" && a.adgroup ? ` <span style="color:var(--mute)">(${esc(a.adgroup)})</span>` : ""}
+      ${has ? ` · 광고비/일 ${short(a.pre.cost)} → ${short(a.post.cost)}${p != null ? ` (${pctTxt(p)})` : ""}` : ""} ${resultHTML(a)}</li>`;
+  };
+  const row = document.createElement("tr");
+  row.className = "detail";
+  row.innerHTML = `<td colspan="6"><ul class="dmore" style="list-style:none;padding-left:0;display:grid;gap:6px">${acts.map(line).join("")}</ul></td>`;
+  tr.after(row);
 }
 function toggleDetail(tr, a){
   const nx = tr.nextElementSibling;
@@ -335,6 +420,8 @@ function segs(){
   $("#sortSeg").innerHTML = SORTS.map(([k, lb]) => `<button data-s="${k}" class="${k === st.sort ? "on" : ""}">${lb}</button>`).join("");
   $("#rangeSeg").innerHTML = [7, 14, 30].map(r => `<button data-r="${r}" class="${r === st.range ? "on" : ""}">최근 ${r}일</button>`).join("") +
     `<button data-r="custom" class="${st.range === "custom" ? "on" : ""}">날짜 직접 선택</button>`;
+  $("#viewSeg").innerHTML = VIEWS.map(([k, lb]) => `<button data-v="${k}" class="${k === st.view ? "on" : ""}">${lb}</button>`).join("");
+  $("#viewSeg").querySelectorAll("button").forEach(b => b.onclick = () => { st.view = b.dataset.v; segs(); renderRows(actsOf(st.acc)); });
   $("#sortSeg").querySelectorAll("button").forEach(b => b.onclick = () => { st.sort = b.dataset.s; segs(); renderRows(actsOf(st.acc)); });
   $("#rangeSeg").querySelectorAll("button").forEach(b => b.onclick = () => {
     if (b.dataset.r === "custom") {

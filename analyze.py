@@ -163,11 +163,9 @@ class Analyzer:
             first = items[0]
             if measurable:
                 pre, post, n_pre, n_post = self.compare(cid, level, eid, change_day, have)
-                chart = self.chart(cid, level, eid, change_day)
             else:
                 pre = post = None
                 n_pre = n_post = 0
-                chart = []
             a_pre, a_post, _, _ = self.compare(cid, "account", cid, change_day, have)
             acct_metric = "conv_amt" if a_pre and a_post and (a_pre["conv_amt"] + a_post["conv_amt"]) > 0 else "clk"
             acct_pct = _pct(a_pre[acct_metric], a_post[acct_metric]) if a_pre and a_post else None
@@ -197,6 +195,8 @@ class Analyzer:
                 "customer_id": cid, "account": acc.get("name") or cid, "login": acc.get("login_id", ""),
                 "date": day, "ts": max(i["ts"] for i in items), "level": level,
                 "campaign": camp_name, "adgroup": grp_name if level == "adgroup" else "",
+                "campaign_id": first["campaign_id"] or (ent.get((cid, eid), {}).get("campaign_id", "") if measurable else ""),
+                "adgroup_id": eid if level == "adgroup" and measurable else "",
                 "categories": sorted({i["category"] for i in items}),
                 "actors": sorted({i["actor"] for i in items if i["actor"]}),
                 "items": [{"ts": i["ts"][11:16], "category": i["category"], "type": i["change_type"],
@@ -207,7 +207,6 @@ class Analyzer:
                 "pct": {m: _r1(_pct(pre[m], post[m])) for m in ("imp", "clk", "ctr", "cpc", "cost", "conv", "conv_amt", "roas")} if pre and post else {},
                 "acct_pct": _r1(acct_pct),
                 "overlap": len(other),
-                "chart": chart,
                 "kw_perf": kw_perf,
             })
         actions.sort(key=lambda a: a["ts"], reverse=True)
@@ -222,8 +221,26 @@ class Analyzer:
                 r = ser.get(d.isoformat(), {})
                 pts.append([d.isoformat(), round(r.get("cost", 0) or 0), int(r.get("clk", 0) or 0), round(r.get("conv_amt", 0) or 0)])
                 d += timedelta(days=1)
+            # 변경이 있었던 광고그룹·캠페인의 일별 성과 (광고그룹별·캠페인별 보기용, 0인 날은 생략)
+            groups = {}
+            for a in actions:
+                if a["customer_id"] != cid:
+                    continue
+                for lvl, gid in (("adgroup", a["adgroup_id"]), ("campaign", a["campaign_id"])):
+                    key = f"{lvl[0]}:{gid}"
+                    if not gid or key in groups:
+                        continue
+                    gser = self.series(cid, lvl, gid)
+                    sparse = []
+                    for i, p in enumerate(pts):
+                        r = gser.get(p[0])
+                        if r and (r.get("cost") or r.get("clk") or r.get("conv_amt")):
+                            sparse.append([i, round(r.get("cost") or 0), int(r.get("clk") or 0), round(r.get("conv_amt") or 0)])
+                    info = ent.get((cid, gid), {})
+                    groups[key] = {"level": lvl, "id": gid, "name": info.get("name") or (a["adgroup"] if lvl == "adgroup" else a["campaign"]),
+                                   "campaign_id": info.get("campaign_id") or a["campaign_id"], "s": sparse}
             acc_out.append({"customer_id": cid, "name": acc.get("name") or cid, "login": acc.get("login_id", ""),
-                            "series": pts, "n_actions": sum(1 for a in actions if a["customer_id"] == cid)})
+                            "series": pts, "groups": groups, "n_actions": sum(1 for a in actions if a["customer_id"] == cid)})
         acc_out.sort(key=lambda a: -sum(p[1] for p in a["series"][-7:]))
         return {"base_date": self.base.isoformat(), "window": self.W, "threshold": self.T,
                 "report_days": config.REPORT_DAYS, "accounts": acc_out, "actions": actions}
