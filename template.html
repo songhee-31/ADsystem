@@ -442,7 +442,8 @@ function init(){
   if (!DATA || !DATA.accounts.length) { document.body.innerHTML = '<div class="empty">데이터가 없습니다. python main.py build 로 다시 만들어 주세요.</div>'; return; }
   document.querySelectorAll(".w").forEach(e => e.textContent = DATA.window);
   document.querySelectorAll(".th").forEach(e => e.textContent = DATA.threshold);
-  $("#meta").textContent = `${DATA.base_date} 기준 · 광고주 ${DATA.accounts.length}개${DATA.owner ? " · " + DATA.owner : ""}`;
+  $("#meta").textContent = `${DATA.base_date} 기준 · 광고주 ${DATA.accounts.length}개` +
+    (DATA.hidden_accounts ? ` (최근 ${DATA.idle_days}일 광고비 0원 ${DATA.hidden_accounts}개 제외)` : "") + (DATA.owner ? " · " + DATA.owner : "");
   $("#pick").innerHTML = DATA.accounts.map(a => `<option value="${a.customer_id}">${esc(a.name)}</option>`).join("");
   $("#pick").onchange = e => select(e.target.value);
   $("#q").oninput = e => { st.q = e.target.value; renderSide(); };

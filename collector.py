@@ -412,6 +412,9 @@ def collect_structure(conn, api, customer_id, today, log=print):
     save_entities(conn, customer_id, snap)
     prev = latest_snapshot(customer_id, today)
     since = (date.fromisoformat(today) - timedelta(days=config.BACKFILL_DAYS)).isoformat()
+    # 쉬다가 다시 광고비를 쓰기 시작한 광고주: 오래된 스냅샷과 비교하면 변경 날짜가 뭉개지므로 처음처럼 다룬다
+    if prev and datetime.fromisoformat(prev["taken_at"]).date().isoformat() < since:
+        prev = None
     if prev:
         events = diff_snapshots(customer_id, prev, snap)
     else:
@@ -515,6 +518,14 @@ def list_accounts(log=print):
     return out
 
 
+def is_active(conn, customer_id, today):
+    """최근 IDLE_DAYS 일 동안 광고비가 1원이라도 있었는지."""
+    since = (date.fromisoformat(today) - timedelta(days=config.IDLE_DAYS)).isoformat()
+    row = conn.execute("SELECT SUM(cost) FROM daily_stats WHERE customer_id=? AND level='account' AND date>=? AND date<?",
+                       (customer_id, since, today)).fetchone()
+    return bool(row and row[0])
+
+
 def run_account(conn, acc, today):
     msgs = []
     log = msgs.append
@@ -522,8 +533,13 @@ def run_account(conn, acc, today):
     conn = db.connect()  # 스레드마다 별도 연결 (sqlite 연결은 스레드 간 공유 불가)
     try:
         api = NaverAPI(cid)
-        n_ev, _ = collect_structure(conn, api, cid, today, log)
+        # 성과를 먼저 받아(가벼움) 최근 30일 광고비가 있는 광고주만 계정 구조를 수집한다(무거움).
+        # 광고비가 다시 생기면 다음 수집부터 자동으로 다시 들어온다.
         n_days = collect_stats(conn, api, cid, today, log)
+        if not is_active(conn, cid, today):
+            log(f"· {acc['name']} ({acc['login_id']}): 최근 {config.IDLE_DAYS}일 광고비 0원 → 구조 수집 생략")
+            return msgs
+        n_ev, _ = collect_structure(conn, api, cid, today, log)
         log(f"✔ {acc['name']} ({acc['login_id']}): 변경 {n_ev}건 감지, 성과 {n_days}일 수집")
     except NaverAPIError as e:
         log(f"✖ {acc['name']} ({acc['login_id']}): {e}")

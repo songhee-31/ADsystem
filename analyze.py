@@ -117,6 +117,13 @@ class Analyzer:
     def run(self):
         since = (self.base - timedelta(days=config.REPORT_DAYS)).isoformat()
         accounts = {r["customer_id"]: dict(r) for r in self.conn.execute("SELECT * FROM accounts")}
+        # 최근 IDLE_DAYS 일 광고비 0원인 광고주는 화면에서 뺀다 (파일 크기·로딩 속도). 광고비가 다시 생기면 자동으로 다시 나온다
+        idle_since = (self.base - timedelta(days=config.IDLE_DAYS - 1)).isoformat()
+        active = {r[0] for r in self.conn.execute(
+            "SELECT customer_id FROM daily_stats WHERE level='account' AND date>=? AND date<=? GROUP BY customer_id HAVING SUM(cost) > 0",
+            (idle_since, self.base.isoformat()))}
+        self.hidden_accounts = len(accounts) - len(active & set(accounts))
+        accounts = {k: v for k, v in accounts.items() if k in active}
         ent = {}
         name_idx = {}
         for r in self.conn.execute("SELECT * FROM entities"):
@@ -125,7 +132,8 @@ class Analyzer:
 
         evs = [dict(r) for r in self.conn.execute(
             "SELECT * FROM change_events WHERE date>=? ORDER BY ts", (since,))
-            if (r["actor"] or "").strip().upper() != "SYSTEM"]  # 네이버 자동 변경(SYSTEM)은 보지 않는다
+            if (r["actor"] or "").strip().upper() != "SYSTEM"  # 네이버 자동 변경(SYSTEM)은 보지 않는다
+            and r["customer_id"] in accounts]
         groups = defaultdict(list)
         for e in evs:
             cid = e["customer_id"]
@@ -243,7 +251,8 @@ class Analyzer:
                             "series": pts, "groups": groups, "n_actions": sum(1 for a in actions if a["customer_id"] == cid)})
         acc_out.sort(key=lambda a: -sum(p[1] for p in a["series"][-7:]))
         return {"base_date": self.base.isoformat(), "window": self.W, "threshold": self.T,
-                "report_days": config.REPORT_DAYS, "accounts": acc_out, "actions": actions}
+                "report_days": config.REPORT_DAYS, "accounts": acc_out, "actions": actions,
+                "idle_days": config.IDLE_DAYS, "hidden_accounts": self.hidden_accounts}
 
 
 def _r1(v):
